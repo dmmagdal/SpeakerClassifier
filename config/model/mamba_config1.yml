@@ -1,0 +1,18 @@
+train:
+  epochs: 10
+  steps: 500          # For printing training loss.
+  batch_size: 16      # 16 is good for distributed/multiGPU setup. Use lower if on single GPU with less VRAM
+  learning_rate: 0.01
+  optimizer: "adamw"
+model:
+  d_model: 256
+  n_layer: 12
+  vocab_size: 45
+  d_state: 32
+  dt_rank: "auto"
+  d_conv: 4
+  pad_vocab_size_multiple: 8
+  conv_bias: true
+  bias: false
+  scan_mode: "cumsum" # "cumsum" or "logcumsumexp"
+  n_mels: 80

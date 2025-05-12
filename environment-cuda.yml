@@ -1,0 +1,27 @@
+name: cs7643-mamba-cuda
+channels:
+  - defaults
+dependencies:
+  - python==3.11
+  - cuda=12.4
+  - jupyter
+  - matplotlib
+  - tqdm
+  - pip
+  - pip:
+    - datasets
+    - einops
+    - inflect
+    - librosa
+    - kagglehub
+    - mamba-ssm
+    - notebook
+    - numpy
+    - pytorch-memlab
+    - soundfile
+    - tensorboard
+    - torch
+    - torchaudio
+    - torchinfo
+    - transformers
+    - unidecode

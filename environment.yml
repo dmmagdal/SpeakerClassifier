@@ -1,0 +1,25 @@
+name: cs7643-mamba
+channels:
+  - defaults
+dependencies:
+  - python==3.11
+  - jupyter
+  - matplotlib
+  - tqdm
+  - pip
+  - pip:
+    - datasets
+    - einops
+    - inflect
+    - kagglehub
+    - librosa
+    - notebook
+    - numpy
+    - pytorch-memlab
+    - soundfile
+    - tensorboard
+    - torch
+    - torchaudio
+    - torchinfo
+    - transformers
+    - unidecode
