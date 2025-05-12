@@ -1,0 +1,22 @@
+# Environment variables.
+.env
+**/__pycache__/
+
+# Dataset folders.
+*/processed/
+/ljspeech_tmp/
+*/ljspeech/
+/librispeech_tmp/
+*/librispeech/
+
+# Checkpoint folders.
+/checkpoints/
+
+# Model memory profiler outputs.
+/mem_profiles/
+memory_profile*.txt
+memory_profile*.png
+
+# Chart model losses.
+chart_losses.json
+chart_losses.png
