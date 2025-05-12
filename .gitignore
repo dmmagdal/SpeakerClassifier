@@ -4,10 +4,9 @@
 
 # Dataset folders.
 */processed/
-/ljspeech_tmp/
-*/ljspeech/
 /librispeech_tmp/
 */librispeech/
+*/speech-accent-archive/
 
 # Checkpoint folders.
 /checkpoints/
