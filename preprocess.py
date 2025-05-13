@@ -12,11 +12,10 @@ from typing import Dict, List
 import yaml
 
 import datasets
-from datasets import Dataset, Audio
+from datasets import Dataset, Audio, concatenate_datasets
 import pandas as pd
 import torch
 import torch.nn as nn
-import torchaudio
 import torchaudio.transforms as T
 
 
@@ -71,9 +70,9 @@ def process_speaker_id_audio(
         and the mel spectrogram array.
     """
     # Process the audio into normalized mel spectrograms.
-    # 1) Convert raw waveform to mel spectrograms.
-    # 2) Convert mel spectrogram amplitudes to decibels.
-    # 3) Normalize mel spectrogram decibels to get a range of values
+    # 1. Convert raw waveform to mel spectrograms.
+    # 2. Convert mel spectrogram amplitudes to decibels.
+    # 3. Normalize mel spectrogram decibels to get a range of values
     #   from [-1, 1].
     mel_spec = mel_spec_fn(torch.FloatTensor(sample["audio"]["array"]))
     db_mel_spec = amp_db_fn(mel_spec)
@@ -88,7 +87,7 @@ def process_speaker_id_audio(
     }
 
 
-def load_speecharchiveaudio(filename: str, audio_dir: str) -> Dict:
+def load_speecharchiveaudio(filename: str, audio_dir: str) -> str:
     """
     Build the path to the speech accent archive audio file and then 
         load it to the dataframe. Make sure to also capture the 
@@ -96,9 +95,7 @@ def load_speecharchiveaudio(filename: str, audio_dir: str) -> Dict:
     @param: filename (str), the basename of the file for this entry.
     @param: audio_dir (str), the path to the directory containing the 
         audio files.
-    @return: returns a dictionary either populated with the raw audio 
-        waveform and the sampling rate or an empty dictionary if the 
-        function was not able to load the audio.
+    @return: returns the full filepath as a string.
     """
     # Build the full path to the audio file.
     audio_path = os.path.join(audio_dir, filename + ".mp3")
@@ -106,15 +103,10 @@ def load_speecharchiveaudio(filename: str, audio_dir: str) -> Dict:
     # Return an empty dictionary if the audio file was not detected.
     if not os.path.exists(audio_path):
         print(f"Could not find required file for {audio_path}")
-        return dict()
+        return ""
 
-    # Extract the audio and sampling rate from the audio file. Return 
-    # it in an object (dictionary).
-    audio, sample_rate = torchaudio.load(audio_path)
-    return {
-        "array": audio.squeeze(0).numpy(),#.tolist(),
-        "sample_rate": sample_rate,
-    }
+    # Return the path to the audio file.
+    return audio_path
 
 
 def load_speecharchive(dataset_dir: str) -> Dataset:
@@ -138,25 +130,16 @@ def load_speecharchive(dataset_dir: str) -> Dataset:
     )
 
     # Remove rows which were not able to load their respective audio.
-    df = df[
-        df["audio"].apply(
-            lambda a: isinstance(a, dict) and "array" in a and "sample_rate" in a
-        )
-    ]
+    df = df[df["audio"] != ""]
 
     # Remove unnecessary columns.
     unnecessary_cols = [
-        "file_missing?", "Unnamed: 9", "Unnamed: 10", "Unnamed: 11"
+        "file_missing?", "Unnamed: 9", "Unnamed: 10", "Unnamed: 11",
+        "__index_level_0__"
     ]
-    filtered_cols = [
-        col for col in unnecessary_cols
-        if col in df.columns
-    ]
-    df = df.drop(columns=filtered_cols)
 
-    print(df.head())
-    print(df.shape)
-    print(len(df["speakerid"].unique()))
+    # Rename "speakerid" to "speaker_id".
+    df = df.rename(columns={"speakerid": "speaker_id"})
 
     # TODO:
     # Noticed for this dataset that there is a single sample per each 
@@ -165,10 +148,18 @@ def load_speecharchive(dataset_dir: str) -> Dataset:
     # overfitting seems high unless I augment the task (ie classify by
     # accent/"native language" feature instead of "speakerid").
 
+    # NOTE:
+    # By converting the "audio" column to Audio() from huggingface 
+    # datasets, the module handles loading in the data via lazy 
+    # loading rather than having to load everything at once and use up
+    # all the memory (was getting OOM issues due to this before).
+    # https://huggingface.co/docs/datasets/en/audio_dataset#local-files
+
     # Return the data converted to a huggingface dataset from the 
     # dataframe.
     data = Dataset.from_pandas(df)
     data = data.cast_column("audio", Audio())
+    data = data.remove_columns(unnecessary_cols)
     return data
 
 
@@ -223,11 +214,10 @@ def main():
     else:
         data = load_speecharchive(dataset_dir)
         print(f"Loaded {args.dataset} dataset")
-    exit()
 
     # Remove unnecessary fields. Since we're doing just plain text to 
     # speech, we are only interested in the text and audio fields.
-    valid_columns = ["text", "audio", "normalized_text"]
+    valid_columns = ["speaker_id", "audio"]
     data = data.remove_columns(
         list(set(data.column_names) - set(valid_columns))
     )
@@ -247,7 +237,7 @@ def main():
         f_min=mel_config["f_min"],
         n_mels=mel_config["n_feats"]
     )
-    amp_db_fn = T.AmplitudeToDB(top_db=80)
+    amp_db_fn = T.AmplitudeToDB(top_db=mel_config["top_db"])
 
     # Preprocess the text and audio data to generate the numerical
     # representation of the text and the mel spectrograms of the audio.
