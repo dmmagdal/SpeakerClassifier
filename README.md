@@ -1,4 +1,4 @@
-# Mamba TTS
+# Speaker Recognition
 
 
 ### Setup
@@ -34,9 +34,6 @@
 ### References
 
  - Datasets
-     - LJSpeech
-         - [original website](https://keithito.com/LJ-Speech-Dataset/)
-         - [huggingface datasets](https://huggingface.co/datasets/keithito/lj_speech)
      - LibriSpeech
          - [original website](https://www.openslr.org/12)
          - [huggingface datasets](https://huggingface.co/datasets/openslr/librispeech_asr)

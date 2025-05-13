@@ -1,4 +1,4 @@
-name: cs7643-mamba
+name: spkr-recog
 channels:
   - defaults
 dependencies:

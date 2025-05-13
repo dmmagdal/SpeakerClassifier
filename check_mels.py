@@ -22,7 +22,6 @@ from tqdm import tqdm
 
 from common.helper import get_device, AverageMeter
 from preprocess import pad_sequence, clear_cache_files
-from text import _symbol_to_id
 from train_tacomamba import load_dataset, custom_collate_fn
 
 
