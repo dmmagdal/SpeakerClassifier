@@ -12,7 +12,7 @@ from typing import Dict, List
 import yaml
 
 import datasets
-from datasets import Dataset, Audio, concatenate_datasets
+from datasets import Dataset, Audio
 import pandas as pd
 import torch
 import torch.nn as nn
@@ -212,7 +212,13 @@ def main():
         data = datasets.load_from_disk(dataset_dir)
         print(f"Loaded {args.dataset} dataset ({split} split)")
     else:
-        data = load_speecharchive(dataset_dir)
+        new_dataset_dir = os.path.join(dataset_dir, split)
+
+        if not os.path.exists(new_dataset_dir) or len(os.listdir(new_dataset_dir)) == 0:
+            data = load_speecharchive(dataset_dir)
+            data.save_to_disk(new_dataset_dir)
+
+        data = datasets.load_from_disk(new_dataset_dir)
         print(f"Loaded {args.dataset} dataset")
 
     # Remove unnecessary fields. Since we're doing just plain text to 
@@ -246,6 +252,16 @@ def main():
         lambda sample: process_speaker_id_audio(sample, mel_spec_fn, amp_db_fn),
         # num_proc=4, # option to use multiprocessing (is not enabled by default)
     )
+
+    # NOTE:
+    # There is an issue when performing the preprocessing for the 
+    # speech accent dataset. Dataset loading is fine, but passing the
+    # dataset to the process_speaker_id_audio() function, there is a
+    # point where the memory usage skyrockets into OOM when it really
+    # shouldn't.
+
+    # TODO:
+    # Remove support for speech accent dataset.
 
     # NOTE:
     # Huggingface datasets will force everything back into relatively
