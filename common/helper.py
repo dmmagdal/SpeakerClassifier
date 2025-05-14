@@ -8,10 +8,8 @@ import os
 from typing import List, Tuple, Dict, Any
 
 import torch
-import torchaudio.transforms as T
+import torch.nn as nn
 import datasets
-
-from ..preprocess import pad_sequence
 
 
 # Globals (usually for seeds).
@@ -40,6 +38,38 @@ def get_device(return_all: bool = False) -> str | List[str]:
     
     return "cpu"
 
+
+def clear_cache_files() -> None:
+    """
+    Clear all cache files for datasets.
+    @param: takes no arguments.
+    @return: returns nothing.
+    """
+    for dirpath, dirnames, filenames in os.walk("./data"):
+        for filename in filenames:
+            if filename.startswith("cache-"):
+                file_path = os.path.join(dirpath, filename)
+                print(f"Removing {file_path}")
+                os.remove(file_path)
+
+
+def pad_sequence(
+        seq: torch.Tensor, batch_first: bool = True, pad_val: int = 0
+) -> torch.Tensor:
+    """
+    Pad the (batched) sequence tensor.
+    @param: seq (torch.Tensor), the sequence tensor that needs to be
+        padded.
+    @param: batch_first (bool), whether the sequence is in batch-first
+        format. Default is True.
+    @param: pad_val (int), the value to use when padding the sequence
+        tensor. Default is 0.
+    @return: returns the sequence tensor modified to be completely 
+        padded according to the maximum length of the batched data.
+    """
+    return nn.utils.rnn.pad_sequence(
+        seq, batch_first=batch_first, padding_value=pad_val
+    )
 
 
 def load_dataset(
@@ -104,7 +134,8 @@ def custom_collate_fn(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     # Batch is a list of dicts: [{'speaker_id': ..., 'mel': ...}, ...].
     # Unpack each column and pad the tensors to the same length.
-    speaker_ids = [item['speaker_id'] for item in batch] # Append -1 as a stop token? 
+    speaker_ids = [item['speaker_id'][0] for item in batch]
+    speaker_ids = torch.stack(speaker_ids)
     mels = [item['mel'] for item in batch]
     mels = pad_sequence(mels)
 

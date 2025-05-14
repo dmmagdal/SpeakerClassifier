@@ -1,28 +1,15 @@
-# check_mels.py
+# check_dataset.py
 
 
 import argparse
-import glob
+from collections import Counter
 import os
-import re
-from time import time
-from typing import Any, Dict, List, Tuple
-import yaml
 
-import datasets
-from packaging import version
-import torch
-from torch import GradScaler
-from torch.amp import autocast
-import torch.nn.functional as F
+import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
-# from torch.utils.tensorboard import SummaryWriter
-import torchinfo
 from tqdm import tqdm
 
-from common.helper import get_device, AverageMeter
-from preprocess import pad_sequence, clear_cache_files
-from train_tacomamba import load_dataset, custom_collate_fn
+from common.helper import load_dataset, custom_collate_fn, clear_cache_files
 
 
 def main():
@@ -35,8 +22,8 @@ def main():
     parser.add_argument(
         "--dataset",
         type=str,
-        choices=["ljspeech", "librispeech"],
-        default="ljspeech",
+        choices=["librispeech"],
+        default="librispeech",
         help="Specify which dataset to Load. Default is `ljspeech` if not specified."
     )
     parser.add_argument(
@@ -54,7 +41,7 @@ def main():
     dataset_name = args.dataset
 
     # Validate dataset path exists.
-    split = args.split if dataset_name == "librispeech" else "train"
+    split = args.train_split if dataset_name == "librispeech" else "train"
     dataset_dir = f"./data/processed/{dataset_name}/{split}"
 
     if not os.path.exists(dataset_dir) or len(os.listdir(dataset_dir)) == 0:
@@ -68,22 +55,23 @@ def main():
 
     batch_size = 32
     train_set = DataLoader(
-        train_set.with_format(type="torch", columns=["text_seq", "mel"]),
+        train_set.with_format(type="torch", columns=["speaker_id", "mel"]),
         batch_size=batch_size,
         collate_fn=custom_collate_fn
     )
     test_set = DataLoader(
-        test_set.with_format(type="torch", columns=["text_seq", "mel"]),
+        test_set.with_format(type="torch", columns=["speaker_id", "mel"]),
         batch_size=batch_size,
         collate_fn=custom_collate_fn
     )
     validation_set = DataLoader(
-        validation_set.with_format(type="torch", columns=["text_seq", "mel"]),
+        validation_set.with_format(type="torch", columns=["speaker_id", "mel"]),
         batch_size=batch_size,
         collate_fn=custom_collate_fn
     )
     clear_cache_files()
 
+    # Get the min and max values from the mel spectrograms.
     max_mel_val, min_mel_val = 0.0, 0.0
     for data in tqdm(train_set):
         mels = data["mel"]
@@ -99,6 +87,47 @@ def main():
         min_mel_val = min(mels.min(), min_mel_val)
 
     print(f"mel max and min values: {max_mel_val} {min_mel_val}")
+
+    # Get the distribution of all speaker ids.
+    folder = "./images/preprocess"
+    os.makedirs(folder, exist_ok=True)
+
+    speaker_counts = Counter()
+    for batch in tqdm(train_set):
+        speaker_counts.update(batch["speaker_id"].tolist())
+    for batch in tqdm(test_set):
+        speaker_counts.update(batch["speaker_id"].tolist())
+    for batch in tqdm(validation_set):
+        speaker_counts.update(batch["speaker_id"].tolist())
+
+    # Plot frequency of each speaker_id.
+    plt.figure(figsize=(12, 5))
+    plt.bar(speaker_counts.keys(), speaker_counts.values())
+    plt.xlabel("Speaker ID")
+    plt.ylabel("Frequency")
+    plt.title("Frequency of Each Speaker ID")
+    plt.xticks(rotation=90)
+    plt.tight_layout()
+    # plt.show()
+    plt.savefig(
+        os.path.join(folder, f"{args.dataset}_speaker_freq.png")
+    )
+
+    # Count how many speaker_ids share the same frequency.
+    frequency_distribution = Counter(speaker_counts.values())
+
+    # Plot histogram of speaker count frequencies.
+    plt.figure(figsize=(10, 5))
+    plt.bar(frequency_distribution.keys(), frequency_distribution.values(), width=1)
+    plt.xlabel("Number of Occurrences per Speaker ID")
+    plt.ylabel("Number of Speaker IDs")
+    plt.title("Distribution of Speaker Frequencies")
+    plt.tight_layout()
+    # plt.show()
+    plt.savefig(
+        os.path.join(folder, f"{args.dataset}_number_of_freqs.png")
+    )
+
     clear_cache_files()
 
     # Exit the program.

@@ -15,41 +15,9 @@ import datasets
 from datasets import Dataset, Audio
 import pandas as pd
 import torch
-import torch.nn as nn
 import torchaudio.transforms as T
 
-
-def clear_cache_files() -> None:
-    """
-    Clear all cache files for datasets.
-    @param: takes no arguments.
-    @return: returns nothing.
-    """
-    for dirpath, dirnames, filenames in os.walk("./data"):
-        for filename in filenames:
-            if filename.startswith("cache-"):
-                file_path = os.path.join(dirpath, filename)
-                print(f"Removing {file_path}")
-                os.remove(file_path)
-
-
-def pad_sequence(
-        seq: torch.Tensor, batch_first: bool = True, pad_val: int = 0
-) -> torch.Tensor:
-    """
-    Pad the (batched) sequence tensor.
-    @param: seq (torch.Tensor), the sequence tensor that needs to be
-        padded.
-    @param: batch_first (bool), whether the sequence is in batch-first
-        format. Default is True.
-    @param: pad_val (int), the value to use when padding the sequence
-        tensor. Default is 0.
-    @return: returns the sequence tensor modified to be completely 
-        padded according to the maximum length of the batched data.
-    """
-    return nn.utils.rnn.pad_sequence(
-        seq, batch_first=batch_first, padding_value=pad_val
-    )
+from common.helper import clear_cache_files
         
 
 def process_speaker_id_audio(
@@ -82,7 +50,7 @@ def process_speaker_id_audio(
     # processed from the audio. Mel spectrogram is ssaved in the form
     # of (seq_len, n_mels).
     return {
-        "speaker_id": torch.LongTensor(sample["speaker_id"]),
+        "speaker_id": torch.LongTensor([sample["speaker_id"]]),
         "mel": torch.FloatTensor(norm_db_mel_spec).transpose(0, 1),
     }
 
