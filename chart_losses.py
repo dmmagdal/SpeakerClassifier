@@ -11,7 +11,6 @@ import yaml
 import matplotlib.pyplot as plt
 from packaging import version
 import torch
-from torch import GradScaler
 from torch.amp import autocast
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
@@ -19,12 +18,9 @@ from torch.utils.data import DataLoader
 import torchinfo
 from tqdm import tqdm
 
-from common.helper import get_device, AverageMeter
+from common.helper import get_device, clear_cache_files, AverageMeter
+from common.helper import load_dataset, custom_collate_fn
 from model.tacomamba import TacoMamba
-# from model.tacomamba_cuda import TacoMamba
-from preprocess import clear_cache_files
-from text import _symbol_to_id
-from train_tacomamba import load_dataset, custom_collate_fn
 
 # Globals (usually for seeds).
 seed = 1234
