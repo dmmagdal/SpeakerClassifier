@@ -4,6 +4,7 @@ train:
   batch_size: 16      # 16 is good for distributed/multiGPU setup. Use lower if on single GPU with less VRAM
   learning_rate: 0.01
   optimizer: "adamw"
+  half_precision: False
 model:
   type: "mamba"
   d_model: 256

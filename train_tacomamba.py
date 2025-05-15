@@ -10,10 +10,8 @@ import glob
 import os
 import re
 from time import time
-from typing import Any, Dict, List, Tuple
 import yaml
 
-import datasets
 from packaging import version
 import torch
 from torch import GradScaler
@@ -21,20 +19,17 @@ from torch.amp import autocast
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 # from torch.utils.tensorboard import SummaryWriter
-from torchaudio import transforms as T
 import torchinfo
 from tqdm import tqdm
 
 from common.helper import get_device, AverageMeter
-# from model.tacomamba import TacoMamba
-from model.tacomamba_cuda import TacoMamba
-from preprocess import pad_sequence, clear_cache_files
-from text import _symbol_to_id
+from common.helper import load_dataset, custom_collate_fn
+from common.helper import clear_cache_files
+from model.conv_model import Conv1DModel
 
 # Globals (usually for seeds).
 seed = 1234
 torch.manual_seed(seed)
-
 
 
 def load_latest_checkpoint(checkpoint_dir):
@@ -155,7 +150,7 @@ def main():
         model_config = yaml.safe_load(f)
 
     # Validate dataset path exists.
-    split = args.split if dataset_name == "librispeech" else "train"
+    split = args.train_split if dataset_name == "librispeech" else "train"
     dataset_dir = f"./data/processed/{dataset_name}/{split}"
 
     if not os.path.exists(dataset_dir) or len(os.listdir(dataset_dir)) == 0:
@@ -173,10 +168,48 @@ def main():
         devices = "cpu"
     print(f"device: {devices}")
 
+    ###################################################################
+    # Dataset loading
+    ###################################################################
+
+    # Load the training, test, and validation data.
+    train_set, test_set, validation_set = load_dataset(
+        dataset_name, dataset_dir
+    )
+    batch_size = model_config["train"]["batch_size"]
+    train_set = DataLoader(
+        train_set.with_format(type="torch", columns=["speaker_id", "mel"]),
+        batch_size=batch_size,
+        collate_fn=custom_collate_fn
+    )
+    test_set = DataLoader(
+        test_set.with_format(type="torch", columns=["speaker_id", "mel"]),
+        batch_size=batch_size,
+        collate_fn=custom_collate_fn
+    )
+    validation_set = DataLoader(
+        validation_set.with_format(type="torch", columns=["speaker_id", "mel"]),
+        batch_size=batch_size,
+        collate_fn=custom_collate_fn
+    )
+    clear_cache_files()
+
     # Parameter initialization.
-    vocab_size = len(list(_symbol_to_id.keys()))
-    model_config["model"]["vocab_size"] = vocab_size
-    print(f"vocab size: {vocab_size}")
+    speaker_ids = []
+    for batch in tqdm(train_set, desc="Isolating speaker_ids from train set"):
+        speaker_ids += batch["speaker_id"].tolist()
+    for batch in tqdm(test_set, desc="Isolating speaker_ids from test set"):
+        speaker_ids += batch["speaker_id"].tolist()
+    for batch in tqdm(validation_set, desc="Isolating speaker_ids from val set"):
+        speaker_ids += batch["speaker_id"].tolist()
+    speaker_ids = list(set(speaker_ids))
+    n_classes = len(speaker_ids)
+    speaker_to_class = {
+        speaker: class_id 
+        for class_id, speaker in enumerate(sorted(speaker_ids))
+    }
+    print(f"Number of classes: {n_classes}")
+    del speaker_ids
 
     # NOTE:
     # Using half precision comes with its own caveats. Trying to test 
@@ -203,17 +236,13 @@ def main():
     ###################################################################
 
     # Initialize model.
-    model = TacoMamba(**model_config["model"])
+    # model = Conv1DModel(**model_config["model"])
+    model = Conv1DModel(80, n_classes)
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=model_config["train"]["learning_rate"]
     )
-    mel_criterion = torch.nn.MSELoss()
-    if model_config["train"]["recon_loss"] == "l1":
-        mel_criterion = torch.nn.L1Loss()
-    # duration_criterion = torch.nn.MSELoss()
-    duration_criterion = torch.nn.L1Loss()
+    criterion = torch.nn.CrossEntropyLoss()
     torchinfo.summary(model)
-    # writer = SummaryWriter(log_dir=os.path.join(checkpoint_path, "logs"))
 
     # Detect existing checkpoint and load weights (if applicable).
     start_epoch = 0
@@ -235,41 +264,11 @@ def main():
                     state[k] = v.to(devices)
 
     # Load model for distributed GPU training.
-    # if devices == "cuda" and args.enable_multiGPU:
-    #     multi_cards = get_device(True)
-    #     if len(multi_cards) > 1:
-    #         model = torch.nn.DataParallel(model)
     if devices == "cuda" and args.enable_multiGPU and torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model)
 
     # Pass model to device.
     model.to(devices)
-
-    ###################################################################
-    # Dataset loading
-    ###################################################################
-
-    # Load the training, test, and validation data.
-    train_set, test_set, validation_set = load_dataset(
-        dataset_name, dataset_dir
-    )
-    batch_size = model_config["train"]["batch_size"]
-    train_set = DataLoader(
-        train_set.with_format(type="torch", columns=["text_seq", "mel"]),
-        batch_size=batch_size,
-        collate_fn=custom_collate_fn
-    )
-    test_set = DataLoader(
-        test_set.with_format(type="torch", columns=["text_seq", "mel"]),
-        batch_size=batch_size,
-        collate_fn=custom_collate_fn
-    )
-    validation_set = DataLoader(
-        validation_set.with_format(type="torch", columns=["text_seq", "mel"]),
-        batch_size=batch_size,
-        collate_fn=custom_collate_fn
-    )
-    clear_cache_files()
 
     ###################################################################
     # Model training
@@ -287,29 +286,23 @@ def main():
 
     # Metrics and timers.
     start_time = time()
-    recon_loss_meter = AverageMeter()
-    dur_loss_meter = AverageMeter()
     loss_meter = AverageMeter()
     iter_meter = AverageMeter()
-    val_recon_loss_meter = AverageMeter()
-    val_dur_loss_meter = AverageMeter()
     val_loss_meter = AverageMeter()
-    test_recon_loss_meter = AverageMeter()
-    test_dur_loss_meter = AverageMeter()
     test_loss_meter = AverageMeter()
 
     for epoch in range(start_epoch, max_epochs):
         # Model training.
         model.train()
-        # total_loss_meter = AverageMeter()
-        # recon_loss_meter = AverageMeter()
-        # duration_loss_meter = AverageMeter()
 
         # for i, data in enumerate(train_set):
         for i, data in enumerate(tqdm(train_set)):
             # Decompose the inputs and expected outputs before sending 
             # both to devices.
-            text_seqs = data["text_seq"].to(devices)
+            speaker_ids = data["speaker_id"].to(devices)
+            labels = torch.LongTensor(
+                [speaker_to_class[speaker] for speaker in speaker_ids.tolist()]
+            ).to(devices)
             mels = data["mel"].to(devices)
 
             # Reset optimizer.
@@ -317,72 +310,25 @@ def main():
 
             # Pass input to model an compute the loss. Apply the loss
             # with back propagation.
-            outs = model.train_step(text_seqs, mels)
             if use_scaler:
                 with autocast(device_type=devices, dtype=torch.float16):
-                    if not args.enable_multiGPU:
-                        outs = model.train_step(text_seqs, mels) 
-                    else:
-                        outs = model.module.train_step(text_seqs, mels)
+                    outs = model(mels)
+                    loss = criterion(outs, labels)
 
-                    mas_durations, pred_durations, mask, pred_mels = outs
-                    recon_loss = mel_criterion(pred_mels[mask], mels[mask])
-                    duration_loss = duration_criterion(
-                        pred_durations, mas_durations
-                    )
-                    loss = recon_loss + duration_loss
-            else:
-                if not args.enable_multiGPU:
-                    outs = model.train_step(text_seqs, mels) 
-                else:
-                    outs = model.module.train_step(text_seqs, mels)
-
-                mas_durations, pred_durations, mask, pred_mels = outs
-                # recon_loss = mel_criterion(pred_mels[mask], mels[mask])
-                mask = mask.unsqueeze(-1)
-                masked_mels = mels * mask
-                masked_pred_mels = pred_mels * mask
-                recon_loss = mel_criterion(masked_pred_mels, masked_mels)
-                # recon_loss = ((masked_pred_mels - masked_mels) ** 2).sum() / mask.sum() # Loss higher than MSE + mean reduction (also does not take into account loss over batch dim)
-                # recon_loss = (((masked_pred_mels - masked_mels) ** 2).sum(dim=[1, 2]) / mask.sum(dim=[1, 2])).mean() # No real difference between last one.
-                duration_loss = duration_criterion(
-                    pred_durations, mas_durations
-                )
-                loss = recon_loss + duration_loss
-
-            if use_scaler:
                 scaler.scale(loss).backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 scaler.step(optimizer)
                 scaler.update()
             else:
+                outs = model(mels)
+                loss = criterion(outs, labels)
+
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
 
-            ###########################################################
-            # Old method (no options)
-            ###########################################################
-            
-            # outs = model.train_step(text_seqs, mels) 
-            # outs = model.module.train_step(text_seqs, mels)
-
-            # mas_durations, pred_durations, mask, pred_mels = outs
-            # recon_loss = mel_criterion(pred_mels[mask], mels[mask])
-            # duration_loss = duration_criterion(
-            #     pred_durations, mas_durations
-            # )
-            # loss = recon_loss + duration_loss
-            
-            # loss.backward()
-
-            # # Iterate through the optimizer.
-            # optimizer.step()
-
             # Update the loss and timer meters.
-            recon_loss_meter.update(recon_loss.item(), text_seqs.size(0))
-            dur_loss_meter.update(duration_loss.item(), text_seqs.size(0))
-            loss_meter.update(loss.item(), text_seqs.size(0))
+            loss_meter.update(loss.item(), speaker_ids.size(0))
             iter_meter.update(time() - start_time)
 
             # Print the epoch, loss, and time elaposed.
@@ -390,8 +336,6 @@ def main():
                 print(
                     f'Epoch: [{epoch + 1}][{i}/{len(train_set)}]\t'
                     f'Loss {loss_meter.val:.3f} ({loss_meter.avg:.3f})\t'
-                    f'Recon Loss {recon_loss_meter.val:.3f} ({recon_loss_meter.avg:.3f})\t'
-                    f'Duration Loss {dur_loss_meter.val:.3f} ({dur_loss_meter.avg:.3f})\t'
                     f'Time {iter_meter.val:.3f} ({iter_meter.avg:.3f})\t'
                 )
 
@@ -399,8 +343,6 @@ def main():
         print(
             f'Epoch: [{epoch + 1}]\t'
             f'Loss {loss_meter.val:.3f} ({loss_meter.avg:.3f})\t'
-            f'Recon Loss {recon_loss_meter.val:.3f} ({recon_loss_meter.avg:.3f})\t'
-            f'Duration Loss {dur_loss_meter.val:.3f} ({dur_loss_meter.avg:.3f})\t'
             f'Time {iter_meter.val:.3f} ({iter_meter.avg:.3f})\t'
         )
 
@@ -413,47 +355,30 @@ def main():
         for i, data in enumerate(validation_set):
             # Send data to devices and decompose the inputs and 
             # expected outputs.
-            text_seqs = data["text_seq"].to(devices)
+            speaker_ids = data["speaker_id"].to(devices)
+            labels = torch.LongTensor(
+                [speaker_to_class[speaker] for speaker in speaker_ids.tolist()]
+            ).to(devices)
             mels = data["mel"].to(devices)
 
             # Pass input to model an compute the loss.
-            # outs = model.train_step(text_seqs, mels)
             with torch.no_grad():
                 if use_scaler:
                     with autocast(device_type=devices, dtype=torch.float16):
-                        if not args.enable_multiGPU:
-                            outs = model.train_step(text_seqs, mels) 
-                        else:
-                            outs = model.module.train_step(text_seqs, mels)
+                        outs = model(mels)
+                        loss = criterion(outs, labels)
                 else:
-                    if not args.enable_multiGPU:
-                        outs = model.train_step(text_seqs, mels) 
-                    else:
-                        outs = model.module.train_step(text_seqs, mels)
-
-            mas_durations, pred_durations, mask, pred_mels = outs
-            # recon_loss = mel_criterion(pred_mels[mask], mels[mask])
-            mask = mask.unsqueeze(-1)
-            masked_mels = mels * mask
-            masked_pred_mels = pred_mels * mask
-            recon_loss = mel_criterion(masked_pred_mels, masked_mels)
-            duration_loss = duration_criterion(
-                pred_durations, mas_durations
-            )
-            loss = recon_loss + duration_loss
+                    outs = model(mels)
+                    loss = criterion(outs, labels)
 
             # Update the validationloss meters.
-            val_recon_loss_meter.update(recon_loss.item(), text_seqs.size(0))
-            val_dur_loss_meter.update(duration_loss.item(), text_seqs.size(0))
-            val_loss_meter.update(loss.item(), text_seqs.size(0))
+            val_loss_meter.update(loss.item(), speaker_ids.size(0))
 
         # Print the epoch, loss, and time elaposed.
         print(
             'Validation:\n'
             f'Epoch: [{epoch + 1}]\t'
             f'Loss {val_loss_meter.val:.3f} ({val_loss_meter.avg:.3f})\t'
-            f'Recon Loss {val_recon_loss_meter.val:.3f} ({val_recon_loss_meter.avg:.3f})\t'
-            f'Duration Loss {val_dur_loss_meter.val:.3f} ({val_dur_loss_meter.avg:.3f})\t'
         )
 
     # Save the final model.
@@ -473,46 +398,29 @@ def main():
     for i, data in enumerate(test_set):
         # Send data to devices and decompose the inputs and 
         # expected outputs.
-        text_seqs = data["text_seq"].to(devices)
+        speaker_ids = data["text_seq"].to(devices)
+        labels = torch.LongTensor(
+            [speaker_to_class[speaker] for speaker in speaker_ids.tolist()]
+        ).to(devices)
         mels = data["mel"].to(devices)
 
         # Pass input to model an compute the loss.
-        # outs = model.train_step(text_seqs, mels)
         if use_scaler:
             with autocast(device_type=devices, dtype=torch.float16):
-                if not args.enable_multiGPU:
-                    outs = model.train_step(text_seqs, mels) 
-                else:
-                    outs = model.module.train_step(text_seqs, mels)
+                outs = model(mels)
+                loss = criterion(outs, labels)
         else:
-            if not args.enable_multiGPU:
-                outs = model.train_step(text_seqs, mels) 
-            else:
-                outs = model.module.train_step(text_seqs, mels)
-
-        mas_durations, pred_durations, mask, pred_mels = outs
-        # recon_loss = mel_criterion(pred_mels[mask], mels[mask])
-        mask = mask.unsqueeze(-1)
-        masked_mels = mels * mask
-        masked_pred_mels = pred_mels * mask
-        recon_loss = mel_criterion(masked_pred_mels, masked_mels)
-        duration_loss = duration_criterion(
-            pred_durations, mas_durations
-        )
-        loss = recon_loss + duration_loss
+            outs = model(mels)
+            loss = criterion(outs, labels)
 
         # Update the validationloss meters.
-        test_recon_loss_meter.update(recon_loss.item(), text_seqs.size(0))
-        test_dur_loss_meter.update(duration_loss.item(), text_seqs.size(0))
-        test_loss_meter.update(loss.item(), text_seqs.size(0))
+        test_loss_meter.update(loss.item(), speaker_ids.size(0))
 
     # Print the epoch, loss, and time elaposed.
     print(
         'Test:\t'
         f'Epoch: [{epoch + 1}]\t'
         f'Loss {test_loss_meter.val:.3f} ({test_loss_meter.avg:.3f})\t'
-        f'Recon Loss {test_recon_loss_meter.val:.3f} ({test_recon_loss_meter.avg:.3f})\t'
-        f'Duration Loss {test_loss_meter.val:.3f} ({test_loss_meter.avg:.3f})\t'
     )
 
     # Clear cache (dataset) files (just in case).
