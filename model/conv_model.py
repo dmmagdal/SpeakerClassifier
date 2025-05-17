@@ -31,25 +31,36 @@ class Conv1DModel(nn.Module):
             Conv1dBlock(128, 128, 3),
             Conv1dBlock(128, 256, 3),
 
-            Conv1dBlock(256, 256, 3),
-            Conv1dBlock(256, 256, 3),
+            # Conv1dBlock(256, 256, 3),
+            # Conv1dBlock(256, 256, 3),
 
-            Conv1dBlock(256, 256, 3),
-            Conv1dBlock(256, 256, 3),
+            # Conv1dBlock(256, 256, 3),
+            # Conv1dBlock(256, 256, 3),
 
             Conv1dBlock(256, 512, 3),
-            Conv1dBlock(512, 512, 3),
-            Conv1dBlock(512, 1024, 3),
+            # Conv1dBlock(256, 512, 3),
+            # Conv1dBlock(512, 512, 3),
+            # Conv1dBlock(512, 1024, 3),
         )
 
         self.global_avg_pool = lambda x: torch.mean(x, dim=2)
 
         self.ff = nn.Sequential(
-            LinearNorm(1024, 4096),
-            nn.ReLU(),
-            LinearNorm(4096, 4096),
-            nn.ReLU(),
-            LinearNorm(4096, 1024),
+            # LinearNorm(1024, 4096),
+            # nn.ReLU(),
+            # LinearNorm(4096, 4096),
+            # nn.ReLU(),
+            # LinearNorm(4096, 1024),
+            # nn.ReLU(),
+            # LinearNorm(1024, 512),
+            #
+            # LinearNorm(512, 1024),
+            # nn.ReLU(),
+            # LinearNorm(1024, 1024),
+            # nn.ReLU(),
+            # LinearNorm(1024, 512),
+            # 
+            LinearNorm(512, 1024),
             nn.ReLU(),
             LinearNorm(1024, 512),
         )

@@ -10,6 +10,7 @@ from typing import List, Tuple, Dict, Any
 import torch
 import torch.nn as nn
 import datasets
+from datasets import concatenate_datasets
 
 
 # Globals (usually for seeds).
@@ -119,6 +120,29 @@ def load_dataset(
         train_set = datasets.load_from_disk(dataset_dir)
         test_set = datasets.load_from_disk(test_dir)
         validation_set = datasets.load_from_disk(validation_dir)
+
+        # NOTE:
+        # For the task of speaker recognition/classification, the 
+        # librispeech dataset splits have labels (speaker_id feature)
+        # that are mutually exclusive. This will result in poor model
+        # training (train loss will go down but validation loss will 
+        # always be going up). We need to combine, shuffle, and 
+        # re-create the 3 splits.
+        train_set_len = len(train_set)
+        test_set_len = len(test_set)
+        validation_set_len = len(validation_set)
+
+        sum1 = train_set_len + test_set_len
+        sum2 = sum1 + validation_set_len
+
+        combined = concatenate_datasets(
+            [train_set, test_set, validation_set]
+        )
+        combined = combined.shuffle(seed)
+
+        train_set = combined.select(range(0, train_set_len))
+        test_set = combined.select(range(train_set_len, sum1))
+        validation_set = combined.select(range(sum1, sum2))
 
     # Return the dataset splits.
     return train_set, test_set, validation_set

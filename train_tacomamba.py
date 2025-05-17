@@ -176,6 +176,40 @@ def main():
     train_set, test_set, validation_set = load_dataset(
         dataset_name, dataset_dir
     )
+
+    train_speaker_ids = [
+        sample["speaker_id"][0] for sample in tqdm(train_set)
+    ]
+    test_speaker_ids = [
+        sample["speaker_id"][0] for sample in tqdm(test_set)
+    ]
+    validation_speaker_ids = [
+        sample["speaker_id"][0] for sample in tqdm(validation_set)
+    ]
+
+    test_only_speakers = set(test_speaker_ids) - set(train_speaker_ids)
+    validation_only_speakers = set(validation_speaker_ids) - set(train_speaker_ids)
+    print(f"test only speaker count: {len(test_only_speakers)}")
+    print(f"validation only speaker count: {len(validation_only_speakers)}")
+
+    # Remove samples from the test and validation set.
+    print(f"test set before filter: {len(test_set)}")
+    test_set = test_set.filter(lambda sample: sample["speaker_id"][0] in train_speaker_ids)
+    print(f"test set after filter: {len(test_set)}")
+
+    print(f"validation set before filter: {len(validation_set)}")
+    validation_set = validation_set.filter(lambda sample: sample["speaker_id"][0] in train_speaker_ids)
+    print(f"validation set after filter: {len(validation_set)}")
+
+    print(train_speaker_ids[:10])
+    print(test_speaker_ids[:10])
+    print(validation_speaker_ids[:10])
+
+    print(f"intersection of labels between train and test: {len(set(train_speaker_ids).intersection(set(test_speaker_ids)))}")
+    print(f"intersection of labels between train and validation: {len(set(train_speaker_ids).intersection(set(validation_speaker_ids)))}")
+    exit()
+
+
     batch_size = model_config["train"]["batch_size"]
     train_set = DataLoader(
         train_set.with_format(type="torch", columns=["speaker_id", "mel"]),
@@ -196,20 +230,46 @@ def main():
 
     # Parameter initialization.
     speaker_ids = []
+    train_speaker_ids = []
+    test_speaker_ids = []
+    validation_speaker_ids = []
     for batch in tqdm(train_set, desc="Isolating speaker_ids from train set"):
         speaker_ids += batch["speaker_id"].tolist()
+        train_speaker_ids += batch["speaker_id"].tolist()
     for batch in tqdm(test_set, desc="Isolating speaker_ids from test set"):
         speaker_ids += batch["speaker_id"].tolist()
+        test_speaker_ids += batch["speaker_id"].tolist()
     for batch in tqdm(validation_set, desc="Isolating speaker_ids from val set"):
         speaker_ids += batch["speaker_id"].tolist()
-    speaker_ids = list(set(speaker_ids))
-    n_classes = len(speaker_ids)
+        validation_speaker_ids += batch["speaker_id"].tolist()
+    exit()
+
+    speaker_ids_list = list(set(speaker_ids))
+    n_classes = len(speaker_ids_list)
     speaker_to_class = {
         speaker: class_id 
-        for class_id, speaker in enumerate(sorted(speaker_ids))
+        for class_id, speaker in enumerate(sorted(speaker_ids_list))
+    }
+    class_to_speaker = {
+        class_id: speaker
+        for speaker, class_id in speaker_to_class.items()
     }
     print(f"Number of classes: {n_classes}")
+
+    # Compute class weights.
+    weights = []
+    for class_id in sorted(list(class_to_speaker.keys())):
+        speaker = class_to_speaker[class_id]
+        speaker_count = train_speaker_ids.count(speaker)
+        if speaker_count == 0:
+            weights.append(0)
+        else:
+            weights.append(
+                len(train_speaker_ids) / (n_classes * speaker_count)
+            )
     del speaker_ids
+    del train_speaker_ids
+    exit()
 
     # NOTE:
     # Using half precision comes with its own caveats. Trying to test 
@@ -239,9 +299,14 @@ def main():
     # model = Conv1DModel(**model_config["model"])
     model = Conv1DModel(80, n_classes)
     optimizer = torch.optim.AdamW(
-        model.parameters(), lr=model_config["train"]["learning_rate"]
+        model.parameters(), 
+        lr=model_config["train"]["learning_rate"],
+        weight_decay=1e-5
     )
-    criterion = torch.nn.CrossEntropyLoss()
+    criterion = torch.nn.CrossEntropyLoss(
+        weight=torch.FloatTensor(weights)
+    )
+    val_criterion = torch.nn.CrossEntropyLoss()
     torchinfo.summary(model)
 
     # Detect existing checkpoint and load weights (if applicable).
@@ -294,6 +359,8 @@ def main():
     for epoch in range(start_epoch, max_epochs):
         # Model training.
         model.train()
+        loss_meter.reset()
+        val_loss_meter.reset()
 
         # for i, data in enumerate(train_set):
         for i, data in enumerate(tqdm(train_set)):
@@ -366,10 +433,12 @@ def main():
                 if use_scaler:
                     with autocast(device_type=devices, dtype=torch.float16):
                         outs = model(mels)
-                        loss = criterion(outs, labels)
+                        # loss = criterion(outs, labels)
+                        loss = val_criterion(outs, labels)
                 else:
                     outs = model(mels)
-                    loss = criterion(outs, labels)
+                    # loss = criterion(outs, labels)
+                    loss = val_criterion(outs, labels)
 
             # Update the validationloss meters.
             val_loss_meter.update(loss.item(), speaker_ids.size(0))
@@ -398,7 +467,7 @@ def main():
     for i, data in enumerate(test_set):
         # Send data to devices and decompose the inputs and 
         # expected outputs.
-        speaker_ids = data["text_seq"].to(devices)
+        speaker_ids = data["speaker_id"].to(devices)
         labels = torch.LongTensor(
             [speaker_to_class[speaker] for speaker in speaker_ids.tolist()]
         ).to(devices)
@@ -408,10 +477,12 @@ def main():
         if use_scaler:
             with autocast(device_type=devices, dtype=torch.float16):
                 outs = model(mels)
-                loss = criterion(outs, labels)
+                # loss = criterion(outs, labels)
+                loss = val_criterion(outs, labels)
         else:
             outs = model(mels)
-            loss = criterion(outs, labels)
+            # loss = criterion(outs, labels)
+            loss = val_criterion(outs, labels)
 
         # Update the validationloss meters.
         test_loss_meter.update(loss.item(), speaker_ids.size(0))
