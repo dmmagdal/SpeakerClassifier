@@ -177,38 +177,18 @@ def main():
         dataset_name, dataset_dir
     )
 
+    # Remove samples that from the test and validation set that contain
+    # labels (speaker_id) exclusive to those splits (or rather, that 
+    # NOT found in the training set).
     train_speaker_ids = [
-        sample["speaker_id"][0] for sample in tqdm(train_set)
+        sample["speaker_id"][0] 
+        for sample in tqdm(
+            train_set, 
+            desc="Counting speaker_ids in train set"
+        )
     ]
-    test_speaker_ids = [
-        sample["speaker_id"][0] for sample in tqdm(test_set)
-    ]
-    validation_speaker_ids = [
-        sample["speaker_id"][0] for sample in tqdm(validation_set)
-    ]
-
-    test_only_speakers = set(test_speaker_ids) - set(train_speaker_ids)
-    validation_only_speakers = set(validation_speaker_ids) - set(train_speaker_ids)
-    print(f"test only speaker count: {len(test_only_speakers)}")
-    print(f"validation only speaker count: {len(validation_only_speakers)}")
-
-    # Remove samples from the test and validation set.
-    print(f"test set before filter: {len(test_set)}")
     test_set = test_set.filter(lambda sample: sample["speaker_id"][0] in train_speaker_ids)
-    print(f"test set after filter: {len(test_set)}")
-
-    print(f"validation set before filter: {len(validation_set)}")
     validation_set = validation_set.filter(lambda sample: sample["speaker_id"][0] in train_speaker_ids)
-    print(f"validation set after filter: {len(validation_set)}")
-
-    print(train_speaker_ids[:10])
-    print(test_speaker_ids[:10])
-    print(validation_speaker_ids[:10])
-
-    print(f"intersection of labels between train and test: {len(set(train_speaker_ids).intersection(set(test_speaker_ids)))}")
-    print(f"intersection of labels between train and validation: {len(set(train_speaker_ids).intersection(set(validation_speaker_ids)))}")
-    exit()
-
 
     batch_size = model_config["train"]["batch_size"]
     train_set = DataLoader(
@@ -230,19 +210,12 @@ def main():
 
     # Parameter initialization.
     speaker_ids = []
-    train_speaker_ids = []
-    test_speaker_ids = []
-    validation_speaker_ids = []
     for batch in tqdm(train_set, desc="Isolating speaker_ids from train set"):
         speaker_ids += batch["speaker_id"].tolist()
-        train_speaker_ids += batch["speaker_id"].tolist()
     for batch in tqdm(test_set, desc="Isolating speaker_ids from test set"):
         speaker_ids += batch["speaker_id"].tolist()
-        test_speaker_ids += batch["speaker_id"].tolist()
     for batch in tqdm(validation_set, desc="Isolating speaker_ids from val set"):
         speaker_ids += batch["speaker_id"].tolist()
-        validation_speaker_ids += batch["speaker_id"].tolist()
-    exit()
 
     speaker_ids_list = list(set(speaker_ids))
     n_classes = len(speaker_ids_list)
@@ -269,7 +242,6 @@ def main():
             )
     del speaker_ids
     del train_speaker_ids
-    exit()
 
     # NOTE:
     # Using half precision comes with its own caveats. Trying to test 
@@ -304,7 +276,7 @@ def main():
         weight_decay=1e-5
     )
     criterion = torch.nn.CrossEntropyLoss(
-        weight=torch.FloatTensor(weights)
+        weight=torch.FloatTensor(weights).to(devices)
     )
     val_criterion = torch.nn.CrossEntropyLoss()
     torchinfo.summary(model)
@@ -414,7 +386,8 @@ def main():
         )
 
         # Checkpoint every 10 epochs.
-        if epoch % 10 == 0 and epoch > 0:
+        # if epoch % 10 == 0 and epoch > 0:
+        if epoch > 0:
             save_checkpoint(model, optimizer, epoch, checkpoint_path)
 
         # Model validation.
