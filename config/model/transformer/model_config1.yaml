@@ -7,7 +7,7 @@ train:
   half_precision: False
 model:
   type: "transformer"
-  d_model: 256
+  d_model: 512        # The dimensionality of the output before the classifier layer.
   n_layer: 12
   vocab_size: 45
   d_state: 32

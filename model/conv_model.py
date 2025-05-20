@@ -10,8 +10,9 @@ from .blocks import Conv2dBlock, Conv1dBlock, LinearNorm
 class Conv1DModel(nn.Module):
     def __init__(
             self,
-            n_mels,
-            n_classes,
+            n_mels: int,
+            n_classes: int,
+            d_model: int,
     ):
         super().__init__()
 
@@ -32,11 +33,11 @@ class Conv1DModel(nn.Module):
         self.ff = nn.Sequential(
             LinearNorm(512, 1024),
             nn.ReLU(),
-            LinearNorm(1024, 512),
+            LinearNorm(1024, d_model),
         )
 
         # Classifier.
-        self.out = nn.Linear(512, n_classes)
+        self.out = nn.Linear(d_model, n_classes)
 
 
     def forward(self, x):
@@ -62,8 +63,9 @@ class Conv1DModel(nn.Module):
 class Conv2DModel(nn.Module):
     def __init__(
             self,
-            n_mels,
-            n_classes,
+            n_mels: int,
+            n_classes: int,
+            d_model: int,
     ):
         super().__init__()
 
@@ -84,11 +86,11 @@ class Conv2DModel(nn.Module):
         self.ff = nn.Sequential(
             LinearNorm(512, 1024),
             nn.ReLU(),
-            LinearNorm(1024, 512),
+            LinearNorm(1024, d_model),
         )
 
         # Classifier.
-        self.out = nn.Linear(512, n_classes)
+        self.out = nn.Linear(d_model, n_classes)
 
 
     def forward(self, x):

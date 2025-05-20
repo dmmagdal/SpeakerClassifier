@@ -112,7 +112,10 @@ def load_dataset(
         validation_dir = f"./data/processed/{dataset_name}/validation.clean"
 
         # Validate split paths.
-        if not os.path.exists(test_dir) or len(os.listdir(test_dir)) == 0:
+        if not os.path.exists(dataset_dir) or len(os.listdir(dataset_dir)) == 0:
+            print(f"Error: Expected librispeech dataset training split to be downloaded to {dataset_dir}. Please download the dataset with `download.py` and process with `preprocess.py`.")
+            exit(1)
+        elif not os.path.exists(test_dir) or len(os.listdir(test_dir)) == 0:
             print(f"Error: Expected librispeech dataset test split to be downloaded to {test_dir}. Please download the dataset with `download.py` and process with `preprocess.py`.")
             exit(1)
         elif not os.path.exists(validation_dir) or len(os.listdir(validation_dir)) == 0:

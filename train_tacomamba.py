@@ -1,6 +1,6 @@
 # train_tacomamba.py
-# Take the specific dataset and model configuration to train the text 
-# to mel spectrogram mamba TTS model.
+# Take the specific dataset and model configuration to train a speaker
+# classifier model.
 # Windows/MacOS/Linux
 # Python 3.11
 
@@ -13,6 +13,7 @@ import re
 from time import time
 import yaml
 
+from datasets import concatenate_datasets
 from packaging import version
 import torch
 from torch import GradScaler
@@ -23,7 +24,7 @@ from tqdm import tqdm
 
 from common.helper import get_device, AverageMeter
 from common.helper import load_dataset, custom_collate_fn
-from common.helper import clear_cache_files
+from common.helper import clear_cache_files, valid_distribution
 from model.conv_model import Conv1DModel
 
 # Globals (usually for seeds).
@@ -73,12 +74,6 @@ def get_latest_checkpoint(folder_path):
     path = ""
     if latest_file:
         path = os.path.join(folder_path, latest_file)
-
-    # Conditional to help with this edge case: No latest file, so 
-    # max_epoch is 0 vs there is a latest file but max_epoch (from
-    # the filename) is really max_epoch + 1, so that would have to
-    # be corrected.
-    max_epoch = max_epoch - 1 if max_epoch > 0 else max_epoch
 
     return (path, max_epoch)
 
@@ -136,6 +131,7 @@ def main():
     dataset_name = args.dataset
     model_config_path = args.model_config
     checkpoint_path = args.checkpoint_path
+    custom_splits = ["all", "all-clean"]
 
     ###################################################################
     # Model config & detect (compute) devices
@@ -157,9 +153,10 @@ def main():
     split = args.train_split if dataset_name == "librispeech" else "train"
     dataset_dir = f"./data/processed/{dataset_name}/{split}"
 
-    if not os.path.exists(dataset_dir) or len(os.listdir(dataset_dir)) == 0:
-        print(f"Error: Expected dataset to be downloaded to {dataset_dir}. Please download the dataset with `download.py` and process with `preprocess.py`.")
-        exit(1)
+    if split not in custom_splits:
+        if not os.path.exists(dataset_dir) or len(os.listdir(dataset_dir)) == 0:
+            print(f"Error: Expected dataset to be downloaded to {dataset_dir}. Please download the dataset with `download.py` and process with `preprocess.py`.")
+            exit(1)
 
     # Detect devices.
     devices = get_device()
@@ -177,9 +174,63 @@ def main():
     ###################################################################
 
     # Load the training, test, and validation data.
-    train_set, test_set, validation_set = load_dataset(
-        dataset_name, dataset_dir
-    )
+    if dataset_name == "librispeech" and split in custom_splits:
+        # The different split names and dataset_dirs.
+        train_100_dir = f"./data/processed/librispeech/train.clean.100"
+        train_360_dir = f"./data/processed/librispeech/train.clean.360"
+        train_500_dir = f"./data/processed/librispeech/train.other.500"
+
+        # Load the 100 and 360 train splits.
+        train_100, test_set, validation_set = load_dataset(
+            dataset_name, train_100_dir, False
+        )
+        train_360, _, _ = load_dataset(
+            dataset_name, train_360_dir, False
+        )
+        train_set = concatenate_datasets([train_100, train_360])
+
+        # Load the 500 train split if specified.
+        if split == "all":
+            train_500, _, _ = load_dataset(
+                dataset_name, train_500_dir, False
+            )
+            train_set = concatenate_datasets([train_set, train_500])
+
+        # Perform the shuffling that's normally done in load_dataset().
+        valid_datasets = False
+        while not valid_datasets:
+            # Take the lengths of the splits.
+            train_set_len = len(train_set)
+            test_set_len = len(test_set)
+            validation_set_len = len(validation_set)
+
+            # Compute the following sums for cleaner indexing.
+            sum1 = train_set_len + test_set_len
+            sum2 = sum1 + validation_set_len
+
+            # Combine the splits into one dataset before shuffling
+            # the entries.
+            combined = concatenate_datasets(
+                [train_set, test_set, validation_set]
+            )
+            combined = combined.shuffle(seed)
+
+            # Split the dataset back into three based on the sums 
+            # and sizes.
+            train_set = combined.select(range(0, train_set_len))
+            test_set = combined.select(range(train_set_len, sum1))
+            validation_set = combined.select(range(sum1, sum2))
+
+            # Validate the datasets such that the test and 
+            # validation splits have no labels (speaker ids) that 
+            # are unique to their respective splits.
+            valid_datasets = valid_distribution(
+                train_set, test_set, validation_set
+            )
+    else:
+        train_set, test_set, validation_set = load_dataset(
+            dataset_name, dataset_dir
+        )
 
     # Remove samples that from the test and validation set that contain
     # labels (speaker_id) exclusive to those splits (or rather, that 
@@ -197,6 +248,8 @@ def main():
     test_set = test_set.filter(lambda sample: sample["speaker_id"][0] in train_speaker_ids)
     validation_set = validation_set.filter(lambda sample: sample["speaker_id"][0] in train_speaker_ids)
 
+    # Load the dataset splits to the data loaders and clear any cached 
+    # files.
     batch_size = model_config["train"]["batch_size"]
     train_set = DataLoader(
         train_set.with_format(type="torch", columns=["speaker_id", "mel"]),
@@ -224,6 +277,8 @@ def main():
     for batch in tqdm(validation_set, desc="Isolating speaker_ids from val set"):
         speaker_ids += batch["speaker_id"].tolist()
 
+    # Create mappings from speaker ids to class ids and visa versa. 
+    # Also count how many classes there will be.
     speaker_ids_list = list(set(speaker_ids))
     n_classes = len(speaker_ids_list)
     speaker_to_class = {
@@ -275,7 +330,11 @@ def main():
 
     # Initialize model.
     # model = Conv1DModel(**model_config["model"])
-    model = Conv1DModel(model_config["model"]["n_mels"], n_classes)
+    model = Conv1DModel(
+        model_config["model"]["n_mels"], 
+        n_classes,
+        model_config["model"]["d_model"], 
+    )
     optimizer = torch.optim.AdamW(
         model.parameters(), 
         lr=model_config["train"]["learning_rate"],

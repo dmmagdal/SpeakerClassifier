@@ -250,7 +250,11 @@ def main():
     ###################################################################
 
     # Initialize model.
-    model = Conv1DModel(model_config["model"]["n_mels"], n_classes)
+    model = Conv1DModel(
+        model_config["model"]["n_mels"], 
+        n_classes,
+        model_config["model"]["d_model"], 
+    )
     criterion = torch.nn.CrossEntropyLoss()
     torchinfo.summary(model)
 
