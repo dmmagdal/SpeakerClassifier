@@ -10,6 +10,7 @@ from typing import List, Tuple, Dict, Any
 import torch
 import torch.nn as nn
 import datasets
+from datasets import Dataset
 from datasets import concatenate_datasets
 
 
@@ -74,8 +75,8 @@ def pad_sequence(
 
 
 def load_dataset(
-        dataset_name: str, dataset_dir: str
-) -> Tuple[datasets.Dataset]:
+        dataset_name: str, dataset_dir: str, shuffle: bool = True
+) -> Tuple[Dataset]:
     """
     Load the train, test, and validation splits of the specified 
         dataset.
@@ -83,6 +84,8 @@ def load_dataset(
         to be used (ljspeech or librispeech).
     @param: dataset_dir (str), the path to the training split of the 
         dataset.
+    @param: shuffle (bool), whether to shuffle the dataset together
+        before splitting into the original sizes. Default is True.
     @return: returns a tuple containing the training set, testing set, 
         and validation set (in that order). Each set is a Dataset object.
     """
@@ -124,28 +127,108 @@ def load_dataset(
         # NOTE:
         # For the task of speaker recognition/classification, the 
         # librispeech dataset splits have labels (speaker_id feature)
-        # that are mutually exclusive. This will result in poor model
-        # training (train loss will go down but validation loss will 
-        # always be going up). We need to combine, shuffle, and 
-        # re-create the 3 splits.
-        train_set_len = len(train_set)
-        test_set_len = len(test_set)
-        validation_set_len = len(validation_set)
+        # that are mutually exclusive (ie validation.clean split has
+        # speaker ids that are completely unique to just that split
+        # and not found in the training split). This will result in 
+        # poor model training (train loss will go down but validation
+        # and or test loss will always be going up). We need to 
+        # combine, shuffle, and re-create the 3 splits.
 
-        sum1 = train_set_len + test_set_len
-        sum2 = sum1 + validation_set_len
+        if shuffle:
+            # NOTE:
+            # This while loop only becomes a problem if there are 
+            # issues with the size and distribution of labels. For the
+            # librispeech dataset, this should not be a problem.
 
-        combined = concatenate_datasets(
-            [train_set, test_set, validation_set]
-        )
-        combined = combined.shuffle(seed)
+            # TODO:
+            # Consider strengthening this case. Rather than check that 
+            # the validation and test splits have exclusive speaker 
+            # ids, make sure the train split has all possible speaker
+            # ids.
 
-        train_set = combined.select(range(0, train_set_len))
-        test_set = combined.select(range(train_set_len, sum1))
-        validation_set = combined.select(range(sum1, sum2))
+            # Iterate the following shuffle loop until the test and 
+            # validation splits are completely comprised of speaker ids
+            # that appear in the training set.
+            valid_datasets = False
+            while not valid_datasets:
+                # Take the lengths of the splits.
+                train_set_len = len(train_set)
+                test_set_len = len(test_set)
+                validation_set_len = len(validation_set)
+
+                # Compute the following sums for cleaner indexing.
+                sum1 = train_set_len + test_set_len
+                sum2 = sum1 + validation_set_len
+
+                # Combine the splits into one dataset before shuffling
+                # the entries.
+                combined = concatenate_datasets(
+                    [train_set, test_set, validation_set]
+                )
+                combined = combined.shuffle(seed)
+
+                # Split the dataset back into three based on the sums 
+                # and sizes.
+                train_set = combined.select(range(0, train_set_len))
+                test_set = combined.select(range(train_set_len, sum1))
+                validation_set = combined.select(range(sum1, sum2))
+
+                # Validate the datasets such that the test and 
+                # validation splits have no labels (speaker ids) that 
+                # are unique to their respective splits.
+                valid_datasets = valid_distribution(
+                    train_set, test_set, validation_set
+                )
 
     # Return the dataset splits.
     return train_set, test_set, validation_set
+
+
+def valid_distribution(
+        train_set: Dataset, 
+        test_set: Dataset, 
+        validation_set: Dataset
+    ) -> bool:
+    """
+    Validate that neither the validation or the test splits of a 
+        dataset contain labels (speaker ids) that are unique to
+        their respective splits.
+    @param: train_set (Dataset), the train split of the dataset.
+    @param: test_set (Dataset), the test split of the dataset.
+    @param: validation_set (Dataset), the validation split of the 
+        dataset.
+    @return: returns a boolean as to whether either the validation or the test splits of a 
+        dataset contain labels (speaker ids) that are unique to
+        their respective splits.
+    """
+    # NOTE:
+    # Including batching and remove_columns args in the dataset.map() 
+    # increases memory usage to be very large (possibly OOM). Not 
+    # including them is perfectly fine.
+
+    # Extract the unique speaker ids for each split.
+    train_ids = set(
+        train_set.map(
+            lambda sample: {"extracted": sample["speaker_id"][0]},
+        )["extracted"]
+    )
+    test_ids = set(
+        test_set.map(
+            lambda sample: {"extracted": sample["speaker_id"][0]},
+        )["extracted"]
+    )
+    validation_ids = set(
+        validation_set.map(
+            lambda sample: {"extracted": sample["speaker_id"][0]},
+        )["extracted"]
+    )
+
+    # Valdiate each split doesn't have speaker ids unique to itself.
+    valid_test = len(train_ids.intersection(test_ids)) == len(test_ids)
+    valid_validation = len(train_ids.intersection(validation_ids)) == len(validation_ids)
+
+    # Return the validation of both the validation and test splits.
+    return valid_test and valid_validation
 
 
 def custom_collate_fn(batch: List[Dict[str, Any]]) -> Dict[str, Any]:

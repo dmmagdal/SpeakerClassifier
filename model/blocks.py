@@ -45,13 +45,10 @@ class Conv1dActNorm(nn.Module):
         else:
             self.act = nn.SiLU()
         self.drop = nn.Dropout(dropout)
-        # # self.norm = nn.LayerNorm(out_dim)
-        # self.norm = nn.BatchNorm1d(out_dim)
 
 
     def forward(self, x):
         x = self.conv(x)
-        # x = self.norm(x)
         x = self.act(x)
         x = self.drop(x)
         return x
@@ -81,6 +78,75 @@ class Conv1dBlock(nn.Module):
         )
         # self.norm = nn.LayerNorm(out_dim)
         self.norm = nn.BatchNorm1d(out_dim)
+        self.use_res = in_dim == out_dim
+
+
+    def forward(self, x):
+        if self.use_res:
+            return self.norm(self.conv1d(x) + x)
+        else:
+            return self.norm(self.conv1d(x))
+
+
+class Conv2dActNorm(nn.Module):
+    def __init__(
+            self, 
+            in_dim, 
+            out_dim, 
+            kernel_size, 
+            stride=1, 
+            pad="same", 
+            activation="relu", 
+            dropout=0.5,
+    ):
+        super().__init__()
+
+        self.conv = nn.Conv2d(
+            in_dim, out_dim, 
+            kernel_size=kernel_size, 
+            stride=stride, 
+            padding=pad,
+        )
+        if activation == "relu":
+            self.act = nn.ReLU()
+        elif activation == "leakyrelu":
+            self.act = nn.LeakyReLU()
+        else:
+            self.act = nn.SiLU()
+        self.drop = nn.Dropout(dropout)
+
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = self.act(x)
+        x = self.drop(x)
+        return x
+
+
+class Conv2dBlock(nn.Module):
+    def __init__(
+            self, 
+            in_dim, 
+            out_dim, 
+            kernel_size, 
+            stride=1, 
+            pad="same", 
+            activation="relu", 
+            dropout=0.5,
+    ):
+        super().__init__()
+
+        self.conv1d = Conv2dActNorm(
+            in_dim, 
+            out_dim, 
+            kernel_size, 
+            stride=stride, 
+            pad=pad, 
+            activation=activation, 
+            dropout=dropout,
+        )
+        # self.norm = nn.LayerNorm(out_dim)
+        self.norm = nn.BatchNorm2d(out_dim)
         self.use_res = in_dim == out_dim
 
 

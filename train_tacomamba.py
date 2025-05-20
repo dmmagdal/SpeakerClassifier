@@ -6,6 +6,7 @@
 
 
 import argparse
+from collections import Counter
 import glob
 import os
 import re
@@ -16,9 +17,7 @@ from packaging import version
 import torch
 from torch import GradScaler
 from torch.amp import autocast
-import torch.nn.functional as F
 from torch.utils.data import DataLoader
-# from torch.utils.tensorboard import SummaryWriter
 import torchinfo
 from tqdm import tqdm
 
@@ -75,6 +74,12 @@ def get_latest_checkpoint(folder_path):
     if latest_file:
         path = os.path.join(folder_path, latest_file)
 
+    # Conditional to help with this edge case: No latest file, so 
+    # max_epoch is 0 vs there is a latest file but max_epoch (from
+    # the filename) is really max_epoch + 1, so that would have to
+    # be corrected.
+    max_epoch = max_epoch - 1 if max_epoch > 0 else max_epoch
+
     return (path, max_epoch)
 
 
@@ -86,11 +91,9 @@ def main():
     @param: takes no arguments.
     @return: returns nothing.
     """
-
     ###################################################################
     # Arguments
     ###################################################################
-
     # Initialize argparser.
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -105,6 +108,7 @@ def main():
         type=str,
         choices=[
             "train.clean.100", "train.clean.360", "train.other.500", 
+            "all-clean", "all"
         ],
         default="train.clean.100",
         help="Specify which training split of the LibriSpeech dataset to Load. Default is `train.clean.100` if not specified."
@@ -180,13 +184,16 @@ def main():
     # Remove samples that from the test and validation set that contain
     # labels (speaker_id) exclusive to those splits (or rather, that 
     # NOT found in the training set).
-    train_speaker_ids = [
-        sample["speaker_id"][0] 
-        for sample in tqdm(
-            train_set, 
-            desc="Counting speaker_ids in train set"
-        )
-    ]
+    speaker_id_freq = Counter(
+        train_set.map(
+            lambda sample: {
+                "extracted": [speaker_id[0] for speaker_id in sample["speaker_id"]]
+            },
+            batched=True,
+            remove_columns=train_set.column_names
+        )["extracted"]
+    )
+    train_speaker_ids = list(speaker_id_freq.keys())
     test_set = test_set.filter(lambda sample: sample["speaker_id"][0] in train_speaker_ids)
     validation_set = validation_set.filter(lambda sample: sample["speaker_id"][0] in train_speaker_ids)
 
@@ -233,13 +240,12 @@ def main():
     weights = []
     for class_id in sorted(list(class_to_speaker.keys())):
         speaker = class_to_speaker[class_id]
-        speaker_count = train_speaker_ids.count(speaker)
-        if speaker_count == 0:
-            weights.append(0)
-        else:
+        if speaker in speaker_id_freq:
             weights.append(
-                len(train_speaker_ids) / (n_classes * speaker_count)
+                len(train_speaker_ids) / (n_classes * speaker_id_freq[speaker])
             )
+        else:
+            weights.append(0)
     del speaker_ids
     del train_speaker_ids
 
@@ -269,7 +275,7 @@ def main():
 
     # Initialize model.
     # model = Conv1DModel(**model_config["model"])
-    model = Conv1DModel(80, n_classes)
+    model = Conv1DModel(model_config["model"]["n_mels"], n_classes)
     optimizer = torch.optim.AdamW(
         model.parameters(), 
         lr=model_config["train"]["learning_rate"],
@@ -334,7 +340,6 @@ def main():
         loss_meter.reset()
         val_loss_meter.reset()
 
-        # for i, data in enumerate(train_set):
         for i, data in enumerate(tqdm(train_set)):
             # Decompose the inputs and expected outputs before sending 
             # both to devices.
@@ -425,11 +430,6 @@ def main():
 
     # Save the final model.
     save_checkpoint(model, optimizer, max_epochs, checkpoint_path)
-
-    ###################################################################
-    # TODO:
-    # Write a solid inference function for the model for testing.
-    ###################################################################
 
     ###################################################################
     # Model testing
