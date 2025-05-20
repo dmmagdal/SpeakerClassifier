@@ -14,102 +14,25 @@ from typing import Any, Dict, List, Tuple
 import yaml
 
 import datasets
-from packaging import version
 import torch
 from torch import GradScaler
 from torch.amp import autocast
 import torch.distributed as dist
 import torch.multiprocessing as mp
-import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
-# from torch.utils.tensorboard import SummaryWriter
 import torchinfo
 from tqdm import tqdm
 
 from common.helper import get_device, AverageMeter
-from model.tacomamba import TacoMamba
-# from model.tacomamba_cuda import TacoMamba
-from preprocess import pad_sequence, clear_cache_files
-from text import _symbol_to_id
+from common.helper import load_dataset, custom_collate_fn
+from common.helper import clear_cache_files
+from model.conv_model import Conv1DModel
+
 
 # Globals (usually for seeds).
 seed = 1234
 torch.manual_seed(seed)
-
-
-def load_dataset(
-        dataset_name: str, dataset_dir: str
-) -> Tuple[datasets.Dataset]:
-    """
-    Load the train, test, and validation splits of the specified 
-        dataset.
-    @param: dataset_name (str), the name of the dataset that is going 
-        to be used (ljspeech or librispeech).
-    @param: dataset_dir (str), the path to the training split of the 
-        dataset.
-    @return: returns a tuple containing the training set, testing set, 
-        and validation set (in that order). Each set is a Dataset object.
-    """
-    # Load the dataset depending on which dataset was specified in the 
-    # arguments.
-    if dataset_name == "ljspeech":
-        # Load the dataset.
-        dataset = datasets.load_from_disk(dataset_dir)
-
-        # Give a 70, 20, 10 split for the train, validation, and test 
-        # splits of the dataset respectively.
-        train_test_split = dataset.train_test_split(
-            test_size=0.3, seed=seed
-        )
-        val_test_split = train_test_split["test"].train_test_split(
-            test_size=1/3, seed=seed
-        )
-        train_set = train_test_split["train"]
-        test_set = val_test_split["test"]
-        validation_set = val_test_split["train"]
-    else:
-        # Test and validation dataset paths.
-        test_dir = f"./data/processed/{dataset_name}/test.clean"
-        validation_dir = f"./data/processed/{dataset_name}/validation.clean"
-
-        # Validate split paths.
-        if not os.path.exists(test_dir) or len(os.listdir(test_dir)) == 0:
-            print(f"Error: Expected librispeech dataset test split to be downloaded to {test_dir}. Please download the dataset with `download.py` and process with `preprocess.py`.")
-            exit(1)
-        elif not os.path.exists(validation_dir) or len(os.listdir(validation_dir)) == 0:
-            print(f"Error: Expected librispeech dataset validation split to be downloaded to {validation_dir}. Please download the dataset with `download.py` and process with `preprocess.py`.")
-            exit(1)
-
-        # Load the dataset splits.
-        train_set = datasets.load_from_disk(dataset_dir)
-        test_set = datasets.load_from_disk(test_dir)
-        validation_set = datasets.load_from_disk(validation_dir)
-
-    # Return the dataset splits.
-    return train_set, test_set, validation_set
-
-
-def custom_collate_fn(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """
-    Collate function to pad out all batch data to the same length.
-    @param: batch (List[Dict[str, Any]]), the batch of data returned by
-        the data loader.
-    @return: returns the batch in the form of the same dictionary where 
-        each key now maps to the padded batch tensor.
-    """
-    # Batch is a list of dicts: [{'text_seq': ..., 'mel': ...}, ...].
-    # Unpack each column and pad the tensors to the same length.
-    text_seqs = [item['text_seq'] for item in batch] # Append -1 as a stop token? 
-    text_seqs = pad_sequence(text_seqs, pad_val=11) # 11 is the id for " " (white space)
-    mels = [item['mel'] for item in batch]
-    mels = pad_sequence(mels)
-
-    # Return the batched data tensors.
-    return {
-        "text_seq": text_seqs,
-        "mel": mels
-    }
 
 
 def load_latest_checkpoint(checkpoint_dir):
@@ -216,10 +139,10 @@ class Trainer:
         self.validation_data = validation_data
 
         # Model losses.
-        self.mel_criterion = torch.nn.MSELoss()
-        if model_config["train"]["recon_loss"] != "mse":
-            self.mel_criterion = torch.nn.L1Loss()
-        self.duration_criterion = torch.nn.MSELoss()
+        self.criterion = torch.nn.CrossEntropyLoss(
+            # weight=
+        )
+        self.val_criterion = torch.nn.CrossEntropyLoss()
 
     
     def _load_optimizer_to_device(self, gpu_id):
@@ -233,34 +156,16 @@ class Trainer:
 
 
     def _run_batch(self, source, targets, train = True):
+        loss_fn = self.val_criterion
         if train:
             self.optimizer.zero_grad()
+            loss_fn = self.criterion
 
         if self.use_fp16:
             with autocast(enabled=self.use_fp16, device_type='cuda', dtype=torch.float16):
                 outs = self.model.module.train_step(source, targets)
-                mas_durations, pred_durations, mask, pred_mels = outs
-                # recon_loss = self.mel_criterion(pred_mels[mask], targets[mask])
-                mask = mask.unsqueeze(-1)
-                masked_mels = targets * mask
-                masked_pred_mels = pred_mels * mask
-                recon_loss = self.mel_criterion(masked_pred_mels, masked_mels)
-                duration_loss = self.duration_criterion(
-                    pred_durations, mas_durations
-                )
-                loss = recon_loss + duration_loss
         else:
             outs = self.model.module.train_step(source, targets)
-            mas_durations, pred_durations, mask, pred_mels = outs
-            # recon_loss = self.mel_criterion(pred_mels[mask], targets[mask])
-            mask = mask.unsqueeze(-1)
-            masked_mels = targets * mask
-            masked_pred_mels = pred_mels * mask
-            recon_loss = self.mel_criterion(masked_pred_mels, masked_mels)
-            duration_loss = self.duration_criterion(
-                pred_durations, mas_durations
-            )
-            loss = recon_loss + duration_loss
 
         if train:
             if self.use_fp16:
@@ -272,7 +177,7 @@ class Trainer:
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                 self.optimizer.step()
 
-        return loss, recon_loss, duration_loss
+        return loss
 
 
     def _run_epoch(self, epoch):
@@ -415,7 +320,7 @@ def ddp_func(rank, world_size, args, model_config):
     checkpoint_path = args.checkpoint_path
 
     # Validate dataset path exists.
-    split = args.split if dataset_name == "librispeech" else "train"
+    split = args.train_split if dataset_name == "librispeech" else "train"
     dataset_dir = f"./data/processed/{dataset_name}/{split}"
 
     # Load the training, test, and validation data.
@@ -534,9 +439,6 @@ def main():
     print(f"device: {devices}")
 
     # Parameter initialization.
-    vocab_size = len(list(_symbol_to_id.keys()))
-    model_config["model"]["vocab_size"] = vocab_size
-    print(f"vocab size: {vocab_size}")
 
     # Half precision check.
     use_scaler = model_config["train"]["half_precision"]
