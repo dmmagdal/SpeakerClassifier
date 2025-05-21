@@ -1,0 +1,12 @@
+train:
+  epochs: 10
+  steps: 500          # For printing training loss.
+  batch_size: 16      # 16 is good for distributed/multiGPU setup. Use lower if on single GPU with less VRAM
+  learning_rate: 0.0001
+  optimizer: "adamw"
+  half_precision: False
+model:
+  type: "conv2d"
+  d_model: 512        # The dimensionality of the output before the classifier layer.
+  n_layer: 12
+  n_mels: 80

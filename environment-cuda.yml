@@ -1,9 +1,9 @@
-name: spkr-recog
+name: spkr-recog-cuda
 channels:
   - defaults
 dependencies:
   - python==3.11
-  - cuda=12.4
+  - cuda==12.6
   - jupyter
   - matplotlib
   - tqdm
@@ -14,7 +14,6 @@ dependencies:
     - inflect
     - librosa
     - kagglehub
-    - mamba-ssm
     - notebook
     - numpy
     - pytorch-memlab
@@ -25,3 +24,4 @@ dependencies:
     - torchinfo
     - transformers
     - unidecode
+    - git+https://github.com/state-spaces/mamba.git
