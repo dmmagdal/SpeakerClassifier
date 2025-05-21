@@ -21,7 +21,7 @@ from torch.utils.data import DataLoader
 import torchinfo
 from tqdm import tqdm
 
-from common.helper import get_device,get_model, AverageMeter
+from common.helper import get_device, get_model, AverageMeter
 from common.helper import load_dataset, custom_collate_fn
 from common.helper import clear_cache_files, load_custom_split_dataset
 

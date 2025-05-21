@@ -7,10 +7,10 @@
      - Use original Mamba (and Mamba 2) implementation from [state-spaces](https://github.com/state-spaces/mamba)
          - Run `conda env create -f environment-cuda.yml`
          - Requires CUDA>11.6 and Linux (see the [installation notes](https://github.com/state-spaces/mamba?tab=readme-ov-file#installation) in the README from the repo for more details on the requirements)
-         - Uses the `mamba-ssm` package from the [state-spaces GitHub](https://github.com/state-spaces/mamba) repo
+         - Uses the `mamba-ssm` package from the [state-spaces GitHub](https://github.com/state-spaces/mamba) repo.
      - Use simple Mamba implementation
          - Run `conda env create -f environment.yml`.
- - Activate environment with `conda activate cs7643-mamba`.
+ - Activate environment with `conda activate spkr-recog` (or `spkr-recog-cuda` if you are using the original Mamba implementation).
 
 
 ### Script Breakdown

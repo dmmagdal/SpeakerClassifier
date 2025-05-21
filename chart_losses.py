@@ -19,8 +19,7 @@ from tqdm import tqdm
 
 from common.helper import get_device, clear_cache_files, AverageMeter
 from common.helper import load_dataset, custom_collate_fn
-from common.helper import load_custom_split_dataset
-from model.conv_model import Conv1DModel
+from common.helper import load_custom_split_dataset, get_model
 
 
 # Globals (usually for seeds).
@@ -258,11 +257,7 @@ def main():
     ###################################################################
 
     # Initialize model.
-    model = Conv1DModel(
-        model_config["model"]["n_mels"], 
-        n_classes,
-        model_config["model"]["d_model"], 
-    )
+    model = get_model(model_config, n_classes)
     criterion = torch.nn.CrossEntropyLoss()
     torchinfo.summary(model)
 

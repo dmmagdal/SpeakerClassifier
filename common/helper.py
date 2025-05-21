@@ -14,6 +14,9 @@ from datasets import Dataset
 from datasets import concatenate_datasets
 
 from model.conv_model import Conv1DModel, Conv2DModel
+from model.mamba_model import MambaTorchModel
+if torch.cuda.is_available():
+    from model.mamba_model_cuda import MambaModel
 
 
 # Globals (usually for seeds).
@@ -57,6 +60,10 @@ def get_model(model_config: Dict[str, Any], n_classes: int) -> torch.nn.Module:
             n_classes,
             model_config["model"]["d_model"], 
         )
+    # elif model_type == "mamba":
+    #     pass
+    # elif model_type == "transformer":
+    #     pass
     else:
         raise ValueError(f"Invalid model type detected: {model_type}")
     
@@ -375,11 +382,13 @@ class AverageMeter(object):
     def __init__(self):
         self.reset()
 
+
     def reset(self):
         self.val = 0
         self.avg = 0
         self.sum = 0
         self.count = 0
+
 
     def update(self, val, n=1):
         self.val = val
