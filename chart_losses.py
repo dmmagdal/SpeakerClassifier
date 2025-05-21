@@ -19,6 +19,7 @@ from tqdm import tqdm
 
 from common.helper import get_device, clear_cache_files, AverageMeter
 from common.helper import load_dataset, custom_collate_fn
+from common.helper import load_custom_split_dataset
 from model.conv_model import Conv1DModel
 
 
@@ -90,6 +91,7 @@ def main():
         type=str,
         choices=[
             "train.clean.100", "train.clean.360", "train.other.500", 
+            "all-clean", "all"
         ],
         default="train.clean.100",
         help="Specify which training split of the LibriSpeech dataset to Load. Default is `train.clean.100` if not specified."
@@ -117,6 +119,7 @@ def main():
     dataset_name = args.dataset
     model_config_path = args.model_config
     checkpoint_path = args.checkpoint_path
+    custom_splits = ["all", "all-clean"]
 
     ###################################################################
     # Check for existing JSON
@@ -148,9 +151,10 @@ def main():
     split = args.train_split if dataset_name == "librispeech" else "train"
     dataset_dir = f"./data/processed/{dataset_name}/{split}"
 
-    if not os.path.exists(dataset_dir) or len(os.listdir(dataset_dir)) == 0:
-        print(f"Error: Expected dataset to be downloaded to {dataset_dir}. Please download the dataset with `download.py` and process with `preprocess.py`.")
-        exit(1)
+    if split not in custom_splits:
+        if not os.path.exists(dataset_dir) or len(os.listdir(dataset_dir)) == 0:
+            print(f"Error: Expected dataset to be downloaded to {dataset_dir}. Please download the dataset with `download.py` and process with `preprocess.py`.")
+            exit(1)
 
     # Detect devices.
     devices = get_device()
@@ -181,11 +185,15 @@ def main():
     ###################################################################
     # Dataset loading
     ###################################################################
-
-    # Load the training, test, and validation data.
-    train_set, test_set, validation_set = load_dataset(
-        dataset_name, dataset_dir
-    )
+    if dataset_name == "librispeech" and split in custom_splits:
+        train_set, test_set, validation_set = load_custom_split_dataset(
+            dataset_name, split
+        )
+    else:
+        # Load the training, test, and validation data.
+        train_set, test_set, validation_set = load_dataset(
+            dataset_name, dataset_dir
+        )
 
     # Remove samples that from the test and validation set that contain
     # labels (speaker_id) exclusive to those splits (or rather, that 

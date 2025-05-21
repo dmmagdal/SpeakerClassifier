@@ -13,7 +13,6 @@ import re
 from time import time
 import yaml
 
-from datasets import concatenate_datasets
 from packaging import version
 import torch
 from torch import GradScaler
@@ -22,10 +21,9 @@ from torch.utils.data import DataLoader
 import torchinfo
 from tqdm import tqdm
 
-from common.helper import get_device, AverageMeter
+from common.helper import get_device,get_model, AverageMeter
 from common.helper import load_dataset, custom_collate_fn
-from common.helper import clear_cache_files, valid_distribution
-from model.conv_model import Conv1DModel
+from common.helper import clear_cache_files, load_custom_split_dataset
 
 # Globals (usually for seeds).
 seed = 1234
@@ -175,58 +173,9 @@ def main():
 
     # Load the training, test, and validation data.
     if dataset_name == "librispeech" and split in custom_splits:
-        # The different split names and dataset_dirs.
-        train_100_dir = f"./data/processed/librispeech/train.clean.100"
-        train_360_dir = f"./data/processed/librispeech/train.clean.360"
-        train_500_dir = f"./data/processed/librispeech/train.other.500"
-
-        # Load the 100 and 360 train splits.
-        train_100, test_set, validation_set = load_dataset(
-            dataset_name, train_100_dir, False
+        train_set, test_set, validation_set = load_custom_split_dataset(
+            dataset_name, split
         )
-        train_360, _, _ = load_dataset(
-            dataset_name, train_360_dir, False
-        )
-        train_set = concatenate_datasets([train_100, train_360])
-
-        # Load the 500 train split if specified.
-        if split == "all":
-            train_500, _, _ = load_dataset(
-                dataset_name, train_500_dir, False
-            )
-            train_set = concatenate_datasets([train_set, train_500])
-
-        # Perform the shuffling that's normally done in load_dataset().
-        valid_datasets = False
-        while not valid_datasets:
-            # Take the lengths of the splits.
-            train_set_len = len(train_set)
-            test_set_len = len(test_set)
-            validation_set_len = len(validation_set)
-
-            # Compute the following sums for cleaner indexing.
-            sum1 = train_set_len + test_set_len
-            sum2 = sum1 + validation_set_len
-
-            # Combine the splits into one dataset before shuffling
-            # the entries.
-            combined = concatenate_datasets(
-                [train_set, test_set, validation_set]
-            )
-            combined = combined.shuffle(seed)
-
-            # Split the dataset back into three based on the sums 
-            # and sizes.
-            train_set = combined.select(range(0, train_set_len))
-            test_set = combined.select(range(train_set_len, sum1))
-            validation_set = combined.select(range(sum1, sum2))
-
-            # Validate the datasets such that the test and 
-            # validation splits have no labels (speaker ids) that 
-            # are unique to their respective splits.
-            valid_datasets = valid_distribution(
-                train_set, test_set, validation_set
-            )
     else:
         train_set, test_set, validation_set = load_dataset(
             dataset_name, dataset_dir
@@ -330,11 +279,7 @@ def main():
 
     # Initialize model.
     # model = Conv1DModel(**model_config["model"])
-    model = Conv1DModel(
-        model_config["model"]["n_mels"], 
-        n_classes,
-        model_config["model"]["d_model"], 
-    )
+    model = get_model(model_config, n_classes)
     optimizer = torch.optim.AdamW(
         model.parameters(), 
         lr=model_config["train"]["learning_rate"],

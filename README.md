@@ -35,8 +35,8 @@
      - train.clean.100: 331
      - train.clean.360: 1001
      - train.other.500: 1246
-     - train.clean.100 + train.clean.360: 
-     - train.clean.100 + train.clean.360 + train.other.500: 
+     - train.clean.100 + train.clean.360: 1252
+     - train.clean.100 + train.clean.360 + train.other.500: 2418
  - Had to mix up the train, test, and validation datasets together because the latter splits had speaker ids that were exclusive to their respective splits and not found in the train sets. Without the "whole picture" in terms of the number of speaker ids, this caused poor scoring on the latter splits (for what should be obvious reasons).
      - These datasets are restored to splits of their original sizes.
      - Also verfied that they datasets are shuffled until the latter splits only contain speaker ids that also appear in the train set split.

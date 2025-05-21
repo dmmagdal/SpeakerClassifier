@@ -13,6 +13,8 @@ import datasets
 from datasets import Dataset
 from datasets import concatenate_datasets
 
+from model.conv_model import Conv1DModel, Conv2DModel
+
 
 # Globals (usually for seeds).
 seed = 1234
@@ -39,6 +41,26 @@ def get_device(return_all: bool = False) -> str | List[str]:
         return "mps"
     
     return "cpu"
+
+
+def get_model(model_config: Dict[str, Any], n_classes: int) -> torch.nn.Module:
+    model_type = model_config["model"]["type"]
+    if model_type == "conv1d":
+        model = Conv1DModel(
+            model_config["model"]["n_mels"], 
+            n_classes,
+            model_config["model"]["d_model"], 
+        )
+    elif model_type == "conv2d":
+        model = Conv2DModel(
+            model_config["model"]["n_mels"], 
+            n_classes,
+            model_config["model"]["d_model"], 
+        )
+    else:
+        raise ValueError(f"Invalid model type detected: {model_type}")
+    
+    return model
 
 
 def clear_cache_files() -> None:
@@ -72,6 +94,94 @@ def pad_sequence(
     return nn.utils.rnn.pad_sequence(
         seq, batch_first=batch_first, padding_value=pad_val
     )
+
+
+def load_custom_split_dataset(
+    dataset_name: str, split: str, shuffle: bool = True
+) -> Tuple[Dataset]:
+    """
+    Load the train, test, and validation splits of the specified 
+        dataset for the custom split.
+    @param: dataset_name (str), the name of the dataset that is going 
+        to be used (ljspeech or librispeech).
+    @param: dataset_dir (str), the path to the training split of the 
+        dataset.
+    @param: shuffle (bool), whether to shuffle the dataset together
+        before splitting into the original sizes. Default is True.
+    @return: returns a tuple containing the training set, testing set, 
+        and validation set (in that order). Each set is a Dataset object.
+    """
+    # Raise value error for any unsupported datasets.
+    supported_datasets = ["librispeech"]
+    if dataset_name not in supported_datasets:
+        raise ValueError(f"Cannot load custom split '{split}' for unsupported dataset '{dataset_name}'")
+
+    # Initialize return datasets as empty dataset objects.
+    train_set = Dataset()
+    test_set = Dataset()
+    validation_set = Dataset()
+
+    if dataset_name == "librispeech":
+        # The different split names and dataset_dirs.
+        train_100_dir = f"./data/processed/librispeech/train.clean.100"
+        train_360_dir = f"./data/processed/librispeech/train.clean.360"
+        train_500_dir = f"./data/processed/librispeech/train.other.500"
+
+        # Load the 100 and 360 train splits.
+        train_100, test_set, validation_set = load_dataset(
+            dataset_name, train_100_dir, False
+        )
+        train_360, _, _ = load_dataset(
+            dataset_name, train_360_dir, False
+        )
+        train_set = concatenate_datasets([train_100, train_360])
+
+        # NOTE:
+        # Up to here, the custom split assumed is "all-clean". The if
+        # branch is for custom split "all".
+
+        # Load the 500 train split if specified.
+        if split == "all":
+            train_500, _, _ = load_dataset(
+                dataset_name, train_500_dir, False
+            )
+            train_set = concatenate_datasets([train_set, train_500])
+
+        # Perform the shuffling that's normally done in load_dataset().
+        valid_datasets = False
+        while not valid_datasets:
+            # Take the lengths of the splits.
+            train_set_len = len(train_set)
+            test_set_len = len(test_set)
+            validation_set_len = len(validation_set)
+
+            # Compute the following sums for cleaner indexing.
+            sum1 = train_set_len + test_set_len
+            sum2 = sum1 + validation_set_len
+
+            # Combine the splits into one dataset before shuffling
+            # the entries.
+            combined = concatenate_datasets(
+                [train_set, test_set, validation_set]
+            )
+            if shuffle:
+                combined = combined.shuffle(seed)
+
+            # Split the dataset back into three based on the sums 
+            # and sizes.
+            train_set = combined.select(range(0, train_set_len))
+            test_set = combined.select(range(train_set_len, sum1))
+            validation_set = combined.select(range(sum1, sum2))
+
+            # Validate the datasets such that the test and 
+            # validation splits have no labels (speaker ids) that 
+            # are unique to their respective splits.
+            valid_datasets = valid_distribution(
+                train_set, test_set, validation_set
+            )
+
+    # Return the dataset splits.
+    return train_set, test_set, valid_datasets
 
 
 def load_dataset(
