@@ -15,18 +15,23 @@
 
 ### Script Breakdown
 
+ - Use `python [SCRIPT_NAME].py --help` to view and understand script arguments.
  - `download.py`
      - Downloads dataset.
-         - You have the option of using LJSpeech dataset from Keith Ito and/or the LibriSpeech dataset from OpenSLR.
+         - You have the option of using the LibriSpeech dataset from OpenSLR. Originally, more datasets were planned for support but this is all that has been built and tested.
  - `preprocess.py`
      - Preprocesses text and audio files.
-         - Preprocessing includes converting dataset texts into integer tokens and audio signals in to mel spectrograms.
+         - Preprocessing includes converting dataset audio signals in to mel spectrograms.
          - The outputs are saved, so be sure to have sufficient hard drive space.
- - `profile_model.py`
-     - Initializes the model and profiles how much memory is consumed by the intermediate output tensors of each layer as well as the activations (intermediate tensors in general within layers).
- - `train_tacomamba.py`
-     - Runs training script over dataset.
- - Use `python [SCRIPT_NAME].py --help` to view and understand script arguments.
+ - `chart_dataset.py`
+     - Performs some data exploration over the dataset, including identifying the maximum and minimum values of the mel spectrograms as well as chart out the distribution of each speaker id (label).
+     - Must be ran after the dataset has been processed with `preprocess.py`.
+ - Model training
+     - Trains the specified model over the specified dataset.
+     - `train_tacomamba.py` for single GPU training.
+     - `train_tacomamba_ddp.py` for multi-GPU, single machine training.
+ - `chart_losses.py`
+     - Runs the trained models over the dataset and records the losses for each epoch. Losses are then output in a JSON file and charted in a graph PNG file.
 
 
 ### Notes
@@ -59,19 +64,18 @@
          - LibriSpeech Multilingual
              - [huggingface datasets](https://huggingface.co/datasets/facebook/multilingual_librispeech)
              - Was not chosen because of a lack of English but could pair well with the LibriSpeech dataset if there is an intention to pretrain a speech embedding model that supports multilingual (would be regular LibriSpeech + LibriSpeech Multilingual). Would have to add/adjust code for that.
- - Repos
+ - Important repos (for Mamba SSMs)
      - [Mamba](https://github.com/state-spaces/mamba) (official implementation)
      - [Mamba-Tiny](https://github.com/PeaBrane/mamba-tiny)
-     - [Mamba-Minimal](https://github.com/johnma2006/mamba-minimal)
 
 
 ### Code References
 
- - huggingface datasets
+ - Huggingface datasets
      - Using [datasets.map()](https://huggingface.co/docs/datasets/en/package_reference/main_classes#datasets.DatasetDict.map)
      - Using [batch mapping](https://huggingface.co/docs/datasets/en/about_map_batch) with datasets
      - Quick start for [datasets](https://huggingface.co/docs/datasets/en/quickstart)
- - pytorch
+ - PyTorch
      - torchaudio
          - [torchaudio.transforms](https://pytorch.org/audio/main/transforms.html)
          - [torchaudio.transforms.melspectrogram](https://pytorch.org/audio/main/generated/torchaudio.transforms.MelSpectrogram.html)

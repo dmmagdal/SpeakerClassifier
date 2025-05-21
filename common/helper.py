@@ -7,11 +7,13 @@
 import os
 from typing import List, Tuple, Dict, Any
 
-import torch
-import torch.nn as nn
 import datasets
 from datasets import Dataset
 from datasets import concatenate_datasets
+import pandas as pd
+import torch
+import torch.nn as nn
+
 
 from model.conv_model import Conv1DModel, Conv2DModel
 from model.mamba_model import MambaTorchModel
@@ -47,6 +49,14 @@ def get_device(return_all: bool = False) -> str | List[str]:
 
 
 def get_model(model_config: Dict[str, Any], n_classes: int) -> torch.nn.Module:
+    """
+    Returns a model instantiated.
+    @param: model_config (Dict), the arguments that are to be passed to 
+        the model as well as any other meta information.
+    @param: n_classes (int), how many classes the model is expected to 
+        predict.
+    @return: returns one of the models instantiated.
+    """
     model_type = model_config["model"]["type"]
     if model_type == "conv1d":
         model = Conv1DModel(
@@ -60,10 +70,23 @@ def get_model(model_config: Dict[str, Any], n_classes: int) -> torch.nn.Module:
             n_classes,
             model_config["model"]["d_model"], 
         )
-    # elif model_type == "mamba":
-    #     pass
-    # elif model_type == "transformer":
-    #     pass
+    elif model_type == "mamba":
+        if model_config["model"]["use_torch"]:
+            MambaTorchModel(
+                model_config["model"]["n_mels"], 
+                n_classes,
+                model_config["model"]["d_model"], 
+                model_config["model"]["n_layers"], 
+            )
+        else:
+            MambaModel(
+                model_config["model"]["n_mels"], 
+                n_classes,
+                model_config["model"]["d_model"], 
+                model_config["model"]["n_layers"],                 
+            )
+    elif model_type == "transformer":
+        pass
     else:
         raise ValueError(f"Invalid model type detected: {model_type}")
     
@@ -124,9 +147,10 @@ def load_custom_split_dataset(
         raise ValueError(f"Cannot load custom split '{split}' for unsupported dataset '{dataset_name}'")
 
     # Initialize return datasets as empty dataset objects.
-    train_set = Dataset()
-    test_set = Dataset()
-    validation_set = Dataset()
+    df = pd.DataFrame(columns=["mel", "speaker_id"])
+    train_set = Dataset.from_pandas(df)
+    test_set = Dataset.from_pandas(df)
+    validation_set = Dataset.from_pandas(df)
 
     if dataset_name == "librispeech":
         # The different split names and dataset_dirs.

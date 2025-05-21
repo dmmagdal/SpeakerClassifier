@@ -15,6 +15,7 @@ dependencies:
     - librosa
     - notebook
     - numpy
+    - pandas
     - pytorch-memlab
     - soundfile
     - tensorboard

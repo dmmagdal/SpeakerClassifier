@@ -16,6 +16,7 @@ dependencies:
     - kagglehub
     - notebook
     - numpy
+    - pandas
     - pytorch-memlab
     - soundfile
     - tensorboard
