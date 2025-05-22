@@ -17,8 +17,7 @@ import torch.nn as nn
 
 from model.conv_model import Conv1DModel, Conv2DModel
 from model.mamba_model import MambaTorchModel
-if torch.cuda.is_available():
-    from model.mamba_model_cuda import MambaModel
+from model.transformer_model import TransformerModel
 
 
 # Globals (usually for seeds).
@@ -72,21 +71,32 @@ def get_model(model_config: Dict[str, Any], n_classes: int) -> torch.nn.Module:
         )
     elif model_type == "mamba":
         if model_config["model"]["use_torch"]:
-            MambaTorchModel(
+            model = MambaTorchModel(
                 model_config["model"]["n_mels"], 
                 n_classes,
                 model_config["model"]["d_model"], 
                 model_config["model"]["n_layers"], 
             )
         else:
-            MambaModel(
-                model_config["model"]["n_mels"], 
-                n_classes,
-                model_config["model"]["d_model"], 
-                model_config["model"]["n_layers"],                 
-            )
+            if torch.cuda.is_available():
+                from model.mamba_model_cuda import MambaModel
+                model = MambaModel(
+                    model_config["model"]["n_mels"], 
+                    n_classes,
+                    model_config["model"]["d_model"], 
+                    model_config["model"]["n_layers"],                 
+                )
+            else:
+                raise ImportError(f"Unable to import mamba-ssm package to instantiate Mamba model because no CUDA devices were detected.")
     elif model_type == "transformer":
-        pass
+        model = TransformerModel(
+                    model_config["model"]["n_mels"], 
+                    n_classes,
+                    model_config["model"]["d_model"], 
+                    model_config["model"]["n_layers"],
+                    model_config["model"]["n_heads"],
+                    model_config["model"]["max_len"],
+                )
     else:
         raise ValueError(f"Invalid model type detected: {model_type}")
     
@@ -212,7 +222,7 @@ def load_custom_split_dataset(
             )
 
     # Return the dataset splits.
-    return train_set, test_set, valid_datasets
+    return train_set, test_set, validation_set
 
 
 def load_dataset(
@@ -390,11 +400,40 @@ def custom_collate_fn(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
     mels = [item['mel'] for item in batch]
     mels = pad_sequence(mels)
 
+    # For transformers so that a mask can be created for the inputs.
+    lengths = [item['mel'].shape[0] for item in batch]
+    lengths = torch.LongTensor(lengths)
+
     # Return the batched data tensors.
     return {
         "speaker_id": speaker_ids,
-        "mel": mels
+        "mel": mels,
+        "length": lengths
     }
+
+
+def get_padding_mask(
+        lengths: torch.LongTensor, max_len: int = None
+    ) -> torch.BoolTensor:
+    """
+    Converts a 1D tensor of lengths to a 2D boolean mask.
+    @param: lengths (torch.LongTensor), a tensor with shape 
+        (batch_size,) where each value is the actual sequence length
+        for the mel spectrograms in the batch.
+    @param: max_len (int), the maximum length to pad to. If None, uses 
+        max from lengths.
+    @return: returns a boolean tensor of shape (batch_size, max_len), 
+        where True indicates padding.
+    """
+    batch_size = lengths.shape[0]
+    max_len = max_len or lengths.max().item()
+
+    # Create mask: True where position >= length (i.e., padding)
+    mask = torch.arange(max_len, device=lengths.device)\
+        .expand(batch_size, max_len) >= lengths.unsqueeze(1)
+
+    # Return the mask (batch_size, max_len).
+    return mask
 
 
 class AverageMeter(object):

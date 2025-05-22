@@ -22,8 +22,10 @@ import torchinfo
 from tqdm import tqdm
 
 from common.helper import get_device, get_model, AverageMeter
-from common.helper import load_dataset, custom_collate_fn
-from common.helper import clear_cache_files, load_custom_split_dataset
+from common.helper import load_dataset, load_custom_split_dataset
+from common.helper import custom_collate_fn, clear_cache_files
+from common.helper import get_padding_mask
+
 
 # Globals (usually for seeds).
 seed = 1234
@@ -218,6 +220,8 @@ def main():
     clear_cache_files()
 
     # Parameter initialization.
+    transformer_model = model_config["model"]["type"] == "transformer"
+    max_len = model_config["model"]["max_len"]
     speaker_ids = []
     for batch in tqdm(train_set, desc="Isolating speaker_ids from train set"):
         speaker_ids += batch["speaker_id"].tolist()
@@ -278,7 +282,6 @@ def main():
     ###################################################################
 
     # Initialize model.
-    # model = Conv1DModel(**model_config["model"])
     model = get_model(model_config, n_classes)
     optimizer = torch.optim.AdamW(
         model.parameters(), 
@@ -360,7 +363,12 @@ def main():
             # with back propagation.
             if use_scaler:
                 with autocast(device_type=devices, dtype=torch.float16):
-                    outs = model(mels)
+                    if transformer_model:
+                        lengths = data["length"]
+                        mask = get_padding_mask(lengths).to(devices)
+                        outs = model(mels, mask)
+                    else:
+                        outs = model(mels)
                     loss = criterion(outs, labels)
 
                 scaler.scale(loss).backward()
@@ -368,7 +376,12 @@ def main():
                 scaler.step(optimizer)
                 scaler.update()
             else:
-                outs = model(mels)
+                if transformer_model:
+                    lengths = data["length"]
+                    mask = get_padding_mask(lengths).to(devices)
+                    outs = model(mels, mask)
+                else:
+                    outs = model(mels)
                 loss = criterion(outs, labels)
 
                 loss.backward()
@@ -414,11 +427,21 @@ def main():
             with torch.no_grad():
                 if use_scaler:
                     with autocast(device_type=devices, dtype=torch.float16):
-                        outs = model(mels)
+                        if transformer_model:
+                            lengths = data["length"]
+                            mask = get_padding_mask(lengths).to(devices)
+                            outs = model(mels, mask)
+                        else:
+                            outs = model(mels)
                         # loss = criterion(outs, labels)
                         loss = val_criterion(outs, labels)
                 else:
-                    outs = model(mels)
+                    if transformer_model:
+                        lengths = data["length"]
+                        mask = get_padding_mask(lengths).to(devices)
+                        outs = model(mels, mask)
+                    else:
+                        outs = model(mels)
                     # loss = criterion(outs, labels)
                     loss = val_criterion(outs, labels)
 
@@ -453,11 +476,21 @@ def main():
         # Pass input to model an compute the loss.
         if use_scaler:
             with autocast(device_type=devices, dtype=torch.float16):
-                outs = model(mels)
+                if transformer_model:
+                    lengths = data["length"]
+                    mask = get_padding_mask(lengths).to(devices)
+                    outs = model(mels, mask)
+                else:
+                    outs = model(mels)
                 # loss = criterion(outs, labels)
                 loss = val_criterion(outs, labels)
         else:
-            outs = model(mels)
+            if transformer_model:
+                lengths = data["length"]
+                mask = get_padding_mask(lengths).to(devices)
+                outs = model(mels, mask)
+            else:
+                outs = model(mels)
             # loss = criterion(outs, labels)
             loss = val_criterion(outs, labels)
 

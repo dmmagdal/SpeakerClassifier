@@ -13,6 +13,7 @@ from tqdm import tqdm
 from common.helper import load_dataset, custom_collate_fn 
 from common.helper import clear_cache_files, load_custom_split_dataset
 
+
 # Globals (usually for seeds).
 seed = 1234
 torch.manual_seed(seed)
@@ -103,6 +104,20 @@ def main():
         min_mel_val = min(mels.min(), min_mel_val)
 
     print(f"mel max and min values: {max_mel_val} {min_mel_val}")
+
+    # Get the max length of the mel spectrograms.
+    max_len = 0
+    for data in tqdm(train_set):
+        mels = data["mel"]
+        max_len = max(mels.shape[1], max_len)
+    for data in tqdm(test_set):
+        mels = data["mel"]
+        max_len = max(mels.shape[1], max_len)
+    for data in tqdm(validation_set):
+        mels = data["mel"]
+        max_len = max(mels.shape[1], max_len)
+
+    print(f"mel spectrogram max length: {max_len}")
 
     # Get the distribution of all speaker ids.
     folder = "./images/preprocess"

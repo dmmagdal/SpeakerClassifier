@@ -8,6 +8,7 @@ train:
 model:
   type: "transformer"
   d_model: 512        # The dimensionality of the output before the classifier layer.
-  n_layer: 6
-  n_head: 4
+  n_layers: 3
+  n_heads: 4
+  max_len: 2304       # 2048 + 256 (longest mel spec length in LibriSpeech is 2185).
   n_mels: 80

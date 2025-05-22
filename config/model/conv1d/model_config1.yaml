@@ -8,5 +8,4 @@ train:
 model:
   type: "conv1d"
   d_model: 512        # The dimensionality of the output before the classifier layer.
-  n_layer: 12
   n_mels: 80

@@ -1,6 +1,8 @@
 # blocks.py
 
 
+import math
+
 import torch
 import torch.nn as nn
 
@@ -155,6 +157,33 @@ class Conv2dBlock(nn.Module):
             return self.norm(self.conv1d(x) + x)
         else:
             return self.norm(self.conv1d(x))
+        
+
+class PositionalEncodings(nn.Module):
+    def __init__(self, d_model, max_len=1024):
+        super().__init__()
+
+        # Initialize positional embeddings.
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len).unsqueeze(1)
+        div_term = torch.exp(
+            torch.arange(0, d_model, 2) * (-math.log(10_000.0) / d_model)
+        )
+
+        # Apply sinusoidal positional encodings
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+
+        # Expand positional encodings to shape (1, max_len, d_model)
+        # (this will help with tensor multiplication in the model).
+        # Register the positional encodings to the layer buffer.
+        pe = pe.unsqueeze(0)
+        self.register_buffer("pe", pe)
+
+
+    def forward(self, x):
+        x = x + self.pe[:, :x.shape[1]]
+        return x
 
 
 class TransformerBlock(nn.Module):

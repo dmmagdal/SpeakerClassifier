@@ -9,12 +9,12 @@ model:
   type: "mamba"
   use_torch: False
   d_model: 512
-  n_layer: 6
+  n_layers: 3
   d_state: 32
   dt_rank: "auto"
   d_conv: 4
   pad_vocab_size_multiple: 8
   conv_bias: true
   bias: false
-  scan_mode: "cumsum" # "cumsum" or "logcumsumexp"
+  scan_mode: "cumsum" # "cumsum" or "logcumsumexp" for pure pytorch implementation
   n_mels: 80
