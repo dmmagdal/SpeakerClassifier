@@ -12,5 +12,5 @@
 # /checkpoints/
 
 # Chart model losses.
-chart_losses.json
-chart_losses.png
+# chart_losses.json
+# chart_losses.png

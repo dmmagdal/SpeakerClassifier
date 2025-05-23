@@ -350,7 +350,7 @@ def main():
 
             # Print the epoch, loss, and time elaposed.
             print(
-                f'Epoch: [{epoch + 1}]\t'
+                f'Epoch: [{epoch}]\t'
                 f'Loss {loss_meter.val:.3f} ({loss_meter.avg:.3f})\t'
                 f'Time {iter_meter.val:.3f} ({iter_meter.avg:.3f})\t'
             )
@@ -394,7 +394,7 @@ def main():
             # Print the epoch, loss, and time elaposed.
             print(
                 f'Validation\t'
-                f'Epoch: [{epoch + 1}]\t'
+                f'Epoch: [{epoch}]\t'
                 f'Loss {val_loss_meter.val:.3f} ({val_loss_meter.avg:.3f})\t'
                 f'Time {iter_meter.val:.3f} ({iter_meter.avg:.3f})\t'
             )
@@ -438,7 +438,7 @@ def main():
             # Print the epoch, loss, and time elaposed.
             print(
                 'Test:\t'
-                f'Epoch: [{epoch + 1}]\t'
+                f'Epoch: [{epoch}]\t'
                 f'Loss {test_loss_meter.val:.3f} ({test_loss_meter.avg:.3f})\t'
             )
             test_losses.append(test_loss_meter.avg)
