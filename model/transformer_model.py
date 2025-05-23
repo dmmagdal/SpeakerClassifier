@@ -4,7 +4,7 @@
 import torch
 import torch.nn as nn
 
-from .blocks import Conv1dBlock, LinearNorm, PositionalEncodings, TransformerBlock
+from .blocks import LinearNorm, PositionalEncodings
 
 
 class TransformerModel(nn.Module):
@@ -21,6 +21,7 @@ class TransformerModel(nn.Module):
         assert n_mels <= 256, "Number of channels in mel spectrogram is too high for this model."
         assert n_layers >= 1, "Number of layers is too low for this model."
 
+        # Input projection and embedding.
         self.input_proj = LinearNorm(n_mels, d_model)
         self.embedding = PositionalEncodings(d_model, max_len)
 
@@ -40,20 +41,18 @@ class TransformerModel(nn.Module):
         #     LinearNorm(d_model, 1024),
         #     nn.ReLU(),
         #     LinearNorm(1024, d_model),
-        # )
+        # ) # Old. Was considered to have this FFN component before classifier but number of parameters (& VRAM usage) was already high without it.
 
         # Classifier.
         self.out = nn.Linear(d_model, n_classes)
 
 
     def forward(self, x, mask=None):
-        # Transpose (B, L, n_mels) to (B, n_mels, L) to allow for 
-        # passing to Conv1d layers in the encoder.
-        # x = x.transpose(1, 2)
+        # Pass input to the projection and positional embedding layers.
         proj_out = self.input_proj(x)
         emb_out = self.embedding(proj_out)
 
-        # Pass input to encoder.
+        # Pass embedding outputs to encoder.
         enc_out = self.enc(emb_out, src_key_padding_mask=mask)
 
         # Pass encoder outputs to the global average pooling layer.

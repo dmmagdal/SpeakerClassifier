@@ -75,7 +75,12 @@ def get_model(model_config: Dict[str, Any], n_classes: int) -> torch.nn.Module:
                 model_config["model"]["n_mels"], 
                 n_classes,
                 model_config["model"]["d_model"], 
-                model_config["model"]["n_layers"], 
+                model_config["model"]["n_layers"],
+                model_config["model"]["d_state"],
+                model_config["model"]["d_conv"],
+                model_config["model"]["dt_rank"],
+                model_config["model"]["conv_bias"],
+                model_config["model"]["bias"],
             )
         else:
             if torch.cuda.is_available():
@@ -84,7 +89,12 @@ def get_model(model_config: Dict[str, Any], n_classes: int) -> torch.nn.Module:
                     model_config["model"]["n_mels"], 
                     n_classes,
                     model_config["model"]["d_model"], 
-                    model_config["model"]["n_layers"],                 
+                    model_config["model"]["n_layers"],
+                    model_config["model"]["d_state"],
+                    model_config["model"]["d_conv"],
+                    model_config["model"]["dt_rank"],
+                    model_config["model"]["conv_bias"],
+                    model_config["model"]["bias"],
                 )
             else:
                 raise ImportError(f"Unable to import mamba-ssm package to instantiate Mamba model because no CUDA devices were detected.")
