@@ -47,6 +47,7 @@
      - Also verfied that they datasets are shuffled until the latter splits only contain speaker ids that also appear in the train set split.
  - I weighted the classes for the speaker ids and passed that to the loss function to allow for a bit of a better balance on the outputs.
  - Anything under a folder marked as "train.460" or "train.960" corresponds to the combination of training sets (train.clean.100 + train.clean.360) and (train.clean.100 + train.clean.360 + train.other.500) respectively.
+ - Mamba has 3 config files. First one is for using the `mamba-ssm` module from the state-spaces repo. This requires CUDA in order to run. The other two are for using a pure pytorch implementation of Mamba. This implementation does not have the same optimizations are the other and may take up considerably more resources.
 
 
 ### References
