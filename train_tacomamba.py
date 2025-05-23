@@ -221,7 +221,12 @@ def main():
 
     # Parameter initialization.
     transformer_model = model_config["model"]["type"] == "transformer"
-    max_len = model_config["model"]["max_len"]
+    if transformer_model:
+        # Pull the max length for the transformer model. This can be
+        # used for generating the padding mask with get_padding_mask()
+        # but is not required (function generates mask to the longest
+        # length in the batch).
+        max_len = model_config["model"]["max_len"]
     speaker_ids = []
     for batch in tqdm(train_set, desc="Isolating speaker_ids from train set"):
         speaker_ids += batch["speaker_id"].tolist()
