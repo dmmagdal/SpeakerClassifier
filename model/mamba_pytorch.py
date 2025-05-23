@@ -149,6 +149,7 @@ class Mamba(nn.Module):
         #                                              # See "Weight Tying" paper
         self.output = nn.Linear(d_model, n_mels, bias=False)
 
+
     def forward(self, input_ids):
         """
         Args:
@@ -196,6 +197,7 @@ class ResidualBlock(nn.Module):
         )
         self.norm = RMSNorm(d_model)
         
+
     def forward(self, x):
         """
         Args:
@@ -273,6 +275,7 @@ class MambaBlock(nn.Module):
         self.D = nn.Parameter(torch.ones(self.d_inner))
         self.out_proj = nn.Linear(self.d_inner, self.d_model, bias=self.bias)
         
+
     def forward(self, x):
         """Mamba block forward. This looks the same as Figure 3 in Section 3.4 in the Mamba paper [1].
     
@@ -303,6 +306,7 @@ class MambaBlock(nn.Module):
         y = y * F.silu(res)
         
         return self.out_proj(y)
+
 
     def ssm(self, x):
         """Runs the SSM. See:
@@ -344,6 +348,7 @@ class RMSNorm(nn.Module):
         super().__init__()
         self.eps = eps
         self.weight = nn.Parameter(torch.ones(d_model))
+
 
     def forward(self, x):
         output = x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps) * self.weight
