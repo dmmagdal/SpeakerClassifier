@@ -81,6 +81,7 @@ def get_model(model_config: Dict[str, Any], n_classes: int) -> torch.nn.Module:
                 model_config["model"]["dt_rank"],
                 model_config["model"]["conv_bias"],
                 model_config["model"]["bias"],
+                model_config["model"]["scan_mode"],
             )
         else:
             if torch.cuda.is_available():

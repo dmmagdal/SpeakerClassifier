@@ -1,4 +1,4 @@
-# mamba_scratch.py
+# mamba_pytorch.py
 # Implementation of the Mamba architecture from PeaBrane's mamba-tiny repo.
 # Source: https://github.com/PeaBrane/mamba-tiny
 # Windows/MacOS/Linux
@@ -28,7 +28,6 @@ Glossary:
 """
 from __future__ import annotations
 
-import json
 import math
 from dataclasses import dataclass
 from typing import Union
@@ -46,39 +45,6 @@ from einops import rearrange, repeat
 # JIT and regular pytorch. For now, eat the performance cost of not 
 # having JIT for these functions.
 #######################################################################
-
-# @torch.jit.script
-# def complex_log(input: torch.Tensor, eps: float = 1e-12):
-#     eps = torch.tensor(eps, dtype=input.dtype, device=input.device)
-#     real = input.abs().maximum(eps).log()
-#     imag = (input < 0).to(input.dtype) * torch.pi
-#     return torch.complex(real, imag)
-
-
-# @torch.jit.script
-# def selective_scan(u: torch.Tensor, dt: torch.Tensor, A: torch.Tensor, B: torch.Tensor, C: torch.Tensor, D: torch.Tensor, mode: str = 'logcumsumexp'):
-#     dA = torch.einsum('bld,dn->bldn', dt, A)
-#     dB_u = torch.einsum('bld,bld,bln->bldn', dt, u, B)
-#     dA = dA.clamp(min=-20)
-    
-#     padding =  (0, 0, 0, 0, 1, 0)
-    
-#     if mode == 'cumsum':            
-#             dA_cumsum = F.pad(dA[:, 1:], padding).cumsum(1).exp()
-#             x = dB_u / (dA_cumsum + 1e-12)
-#             x = x.cumsum(1) * dA_cumsum
-#             y = torch.einsum('bldn,bln->bld', x, C)
-    
-#     elif mode == 'logcumsumexp':  # more numerically stable (Heisen sequence)
-#             dB_u_log = complex_log(dB_u)
-#             dA_star = F.pad(dA[:, 1:].cumsum(1), padding)
-#             x_log = torch.logcumsumexp(dB_u_log - dA_star, 1) + dA_star
-#             y = torch.einsum('bldn,bln->bld', x_log.real.exp() * torch.cos(x_log.imag), C)
-
-#     else:
-#         raise ValueError(f"Expected mode argument to be either 'cumsum' or 'logcumsumexp'. Got {mode}")
-            
-#     return y + u * D
 
 
 def complex_log(input: torch.Tensor, eps: float = 1e-12):
