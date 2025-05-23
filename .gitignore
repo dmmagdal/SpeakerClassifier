@@ -9,12 +9,7 @@
 */speech-accent-archive/
 
 # Checkpoint folders.
-/checkpoints/
-
-# Model memory profiler outputs.
-/mem_profiles/
-memory_profile*.txt
-memory_profile*.png
+# /checkpoints/
 
 # Chart model losses.
 chart_losses.json
