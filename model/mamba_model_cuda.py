@@ -8,6 +8,32 @@ from mamba_ssm import Mamba
 from .blocks import LinearNorm
 
 
+class MambaBlock(nn.Module):
+    def __init__(self, 
+        d_model: int, 
+        d_state: int = 32,
+        d_conv: int = 4,
+        dt_rank: str = "auto",
+        conv_bias: bool = True,
+        bias: bool = False,
+    ):
+        super().__init__()
+
+        self.mamba = Mamba(
+            d_model=d_model,
+            d_state=d_state,
+            d_conv=d_conv,
+            dt_rank=dt_rank,
+            conv_bias=conv_bias,
+            bias=bias
+        )
+        self.norm = nn.LayerNorm(d_model)
+
+
+    def forward(self, x):
+        return self.norm(self.mamba(x))
+
+
 class MambaModel(nn.Module):
     def __init__(self, 
         n_mels: int, 
@@ -32,7 +58,7 @@ class MambaModel(nn.Module):
         # self.encoder_layers = 
         # self.enc = nn.Sequential(*self.encoder_layers)
         self.enc = nn.Sequential(*[
-            Mamba(
+            MambaBlock(
                 d_model=d_model,
                 d_state=d_state,
                 d_conv=d_conv,
