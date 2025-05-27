@@ -55,8 +55,6 @@ class MambaModel(nn.Module):
         self.input_proj = LinearNorm(n_mels, d_model)
 
         # Encoder.
-        # self.encoder_layers = 
-        # self.enc = nn.Sequential(*self.encoder_layers)
         self.enc = nn.Sequential(*[
             MambaBlock(
                 d_model=d_model,

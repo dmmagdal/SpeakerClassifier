@@ -65,6 +65,10 @@
          - LibriSpeech Multilingual
              - [huggingface datasets](https://huggingface.co/datasets/facebook/multilingual_librispeech)
              - Was not chosen because of a lack of English but could pair well with the LibriSpeech dataset if there is an intention to pretrain a speech embedding model that supports multilingual (would be regular LibriSpeech + LibriSpeech Multilingual). Would have to add/adjust code for that.
+         - Speech Accent Archive
+             - [kaggle](https://www.kaggle.com/datasets/rtatman/speech-accent-archive?select=speakers_all.csv)
+             - Was not chosen because there was only 1 sample for each speaker in the dataset. Would have had to relabeled some other feature such as `native_language` as the `speaker_id` in order to fit the rest of the classifier code. 
+             - Additionally, this dataset was not chosen because processing the audio clips resulted in OOM issues, even on 64GB of RAM.
  - Important repos (for Mamba SSMs)
      - [Mamba](https://github.com/state-spaces/mamba) (official implementation)
      - [Mamba-Tiny](https://github.com/PeaBrane/mamba-tiny)

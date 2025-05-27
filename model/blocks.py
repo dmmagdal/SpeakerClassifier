@@ -78,6 +78,10 @@ class Conv1dBlock(nn.Module):
             activation=activation, 
             dropout=dropout,
         )
+        # TODO:
+        # Re-train after swapping BatchNorm layer with LayerNorm layer
+        # (could also experiment with RMSNorm layer provided by pytorch 
+        # too).
         # self.norm = nn.LayerNorm(out_dim)
         self.norm = nn.BatchNorm1d(out_dim)
         self.use_res = in_dim == out_dim
@@ -147,6 +151,10 @@ class Conv2dBlock(nn.Module):
             activation=activation, 
             dropout=dropout,
         )
+        # TODO:
+        # Re-train after swapping BatchNorm layer with LayerNorm layer
+        # (could also experiment with RMSNorm layer provided by pytorch 
+        # too).
         # self.norm = nn.LayerNorm(out_dim)
         self.norm = nn.BatchNorm2d(out_dim)
         self.use_res = in_dim == out_dim
@@ -211,12 +219,3 @@ class TransformerBlock(nn.Module):
         out1 = self.norm1(self.attn(x) + x)
         out2 = self.norm2(self.ff(out1) + out1)
         return out2
-
-
-class MambaBlock(nn.Module):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-
-    def forward(self, x):
-        pass
