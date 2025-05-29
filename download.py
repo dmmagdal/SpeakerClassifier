@@ -1,5 +1,5 @@
 # download.py
-# Download datasets. User indicates which one and split.
+# Download datasets. User indicates which one and the split.
 # Windows/MacOS/Linux
 # Python 3.11
 

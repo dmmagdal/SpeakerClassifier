@@ -1,4 +1,12 @@
 # check_dataset.py
+# Take the specific dataset and give an analysis of the features. This
+# includes printing out the mel spectrogram min and max values (to 
+# validate normalization of the data), charting the frequency of all
+# speaker ids, and the maximum length of the mel spectrograms (this is
+# helpful for some of the models which have to account for a maximum
+# length in their architecture such as transformers).
+# Windows/MacOS/Linux
+# Python 3.11
 
 
 import argparse
@@ -20,7 +28,13 @@ torch.manual_seed(seed)
 
 
 def main():
-
+    """
+    Main function. Load the appropriate dataset (and split if 
+        necessary) in its preprocessed form before extracting key
+        traits and attributes about the data.
+    @param: takes no arguments.
+    @return: returns nothing.
+    """
     ###################################################################
     # Arguments
     ###################################################################

@@ -1,7 +1,6 @@
 # preprocess.py
-# Take the specific dataset and convert the text data to a sequence of
-# int values (long) while also converting the audio data to mel 
-# spectrograms.
+# Take the specific dataset and convert the audio data to mel 
+# spectrograms and the speaker_id data to ints (long).
 # Windows/MacOS/Linux
 # Python 3.11
 
@@ -133,8 +132,8 @@ def load_speecharchive(dataset_dir: str) -> Dataset:
 
 def main():
     """
-    Main function. Load the appropraite dataset (and split if
-        necessary) before having the text and audio processed into a
+    Main function. Load the appropriate dataset (and split if
+        necessary) before having the labels and audio processed into a
         format acceptable for training the model.
     @param: takes no arguments.
     @return: returns nothing.

@@ -1,4 +1,4 @@
-# train_tacomamba.py
+# train.py
 # Take the specific dataset and model configuration to train a speaker
 # classifier model.
 # Windows/MacOS/Linux
@@ -11,12 +11,15 @@ import glob
 import os
 import re
 from time import time
+from typing import Tuple, Any
 import yaml
 
 from packaging import version
 import torch
+import torch.nn as nn
 from torch import GradScaler
 from torch.amp import autocast
+from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 import torchinfo
 from tqdm import tqdm
@@ -32,7 +35,14 @@ seed = 1234
 torch.manual_seed(seed)
 
 
-def load_latest_checkpoint(checkpoint_dir):
+def load_latest_checkpoint(checkpoint_dir: str) -> Any:
+    """
+    Load the latest checkpoint (by file time).
+    @param: checkpoint_dir (str), the path where the checkpoints are 
+        stored.
+    @return: returns an object archived by torch.save(). Ideally, this
+        object should include model weights and optimizer state.
+    """
     checkpoints = glob.glob(os.path.join(checkpoint_dir, "*.pth"))
     if not checkpoints:
         return None
@@ -41,12 +51,33 @@ def load_latest_checkpoint(checkpoint_dir):
     return torch.load(latest_ckpt)
 
 
-def load_checkpoint(checkpoint_path, devices):
+def load_checkpoint(checkpoint_path: str, devices: str) -> Any:
+    """
+    Load the checkpoint and store it to the specified device(s).
+    @param: checkpoint_path (str), the path of the checkpoint to load.
+    @return: returns an object archived by torch.save(). Ideally, this
+        object should include model weights and optimizer state.
+    """
     assert os.path.exists(checkpoint_path) and os.path.isfile(checkpoint_path)
     return torch.load(checkpoint_path, map_location=devices)
 
 
-def save_checkpoint(model, optimizer, epoch, checkpoint_dir):
+def save_checkpoint(
+        model: nn.Module, 
+        optimizer: Optimizer, 
+        epoch: int, 
+        checkpoint_dir: str
+    ) -> None:
+    """
+    Save a model (and the optimizer's current state) to a checkpoint 
+        file.
+    @param: model (nn.Module), the model to be saved.
+    @param: optimizer (Optimizer), the current state of the optimizer.
+    @param: epoch (int), the current epoch.
+    @param: checkpoint_dir (str), the path to the checkpoints folder
+        where the model and optimizer states will be saved.
+    @return: returns nothing.
+    """
     os.makedirs(checkpoint_dir, exist_ok=True)
     path = os.path.join(checkpoint_dir, f"checkpoint_epoch_{epoch}.pth")
     torch.save({
@@ -58,7 +89,15 @@ def save_checkpoint(model, optimizer, epoch, checkpoint_dir):
     print(f"Saved checkpoint: {path}")
 
 
-def get_latest_checkpoint(folder_path):
+def get_latest_checkpoint(folder_path: str) -> Tuple[str, int]:
+    """
+    Get the path and epoch of the latest checkpoint (by file number).
+    @param: folder_path (str), the path where the checkpoints are 
+        stored.
+    @return: returns a tuple containg the path to the checkpoint 
+        (empty string if none exists) and the epoch of that checkpoint
+        (0 by default).
+    """
     pattern = re.compile(r'checkpoint_epoch_(\d+)\.pth')
     max_epoch = 0
     latest_file = None

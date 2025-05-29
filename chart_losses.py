@@ -1,4 +1,8 @@
 # chart_losses.py
+# Chart out the losses of the model across each epoch that was 
+# captured as a checkpoint.
+# Windows/MacOS/Linux
+# Python 3.11
 
 
 import argparse
@@ -7,6 +11,7 @@ import json
 import os
 import re
 from time import time
+from typing import List
 import yaml
 
 import matplotlib.pyplot as plt
@@ -28,7 +33,13 @@ seed = 1234
 torch.manual_seed(seed)
 
 
-def get_ordered_checkpoints(directory):
+def get_ordered_checkpoints(directory) -> List[str]:
+    """
+    Retrieve the checkpoints in ordered form.
+    @param: directory (str), the directory where the checkpoints are
+        stored.
+    @return: returns the checkpoints ordered numerically.
+    """
     pattern = re.compile(r"^checkpoint_epoch_(\d+)\.pth$")
     checkpoint_files = []
 
@@ -46,6 +57,12 @@ def get_ordered_checkpoints(directory):
 
 
 def chart_losses(output_json: str) -> None:
+    """
+    Chart out the losses from the output JSON file.
+    @param: output_json (str), the JSON file containg the loss values
+        for each split of the dataset at each epoch for a model.
+    @return: returns nothing.
+    """
     # Load losses from json and chart them.
     with open(output_json, "r") as f:
         data = json.load(f)
@@ -74,6 +91,15 @@ def chart_losses(output_json: str) -> None:
 
 
 def main():
+    """
+    Main function. Load the trained model along with the appropriate 
+        dataset (and split if necessary) in its preprocessed form. 
+        Iterate through each checkpoint for each epoch in the trained 
+        model and chart out the losses across each split of the 
+        dataset.
+    @param: takes no arguments.
+    @return: returns nothing.
+    """
     ###################################################################
     # Arguments
     ###################################################################

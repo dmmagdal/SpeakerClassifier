@@ -13,6 +13,11 @@
  - Activate environment with `conda activate spkr-recog` (or `spkr-recog-cuda` if you are using the original Mamba implementation).
 
 
+#### STORAGE REQUIREMENTS
+
+This repo uses the LibriSpeech dataset, which can be quite large on-disk. After downloading and preprocessing all splits, the total storage usage comes out to around **250 GB** of disk usage. Download splits as necessary OR have enough storage if you want to run the full 960 hours of training data. Without the datasets, the storage usage is at around 15 GB for the pre-trained model checkpoints in `./checkpoints`. Please be sure to have sufficient disk space when downloading and using this repository.
+
+
 ### Script Breakdown
 
  - Use `python [SCRIPT_NAME].py --help` to view and understand script arguments.
