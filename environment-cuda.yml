@@ -17,6 +17,7 @@ dependencies:
     - notebook
     - numpy
     - pandas
+    - nvidia-ml-py3
     - pytorch-memlab
     - soundfile
     - tensorboard

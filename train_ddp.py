@@ -1,4 +1,4 @@
-# train_tacomamba_ddp.py
+# train_ddp.py
 # Take the specific dataset and model configuration to train the text 
 # to mel spectrogram mamba TTS model.
 # Windows/MacOS/Linux

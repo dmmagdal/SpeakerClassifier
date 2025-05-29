@@ -39,6 +39,13 @@ This repo uses the LibriSpeech dataset, which can be quite large on-disk. After 
      - Runs the trained models over the dataset and records the losses for each epoch. Losses are then output in a JSON file and charted in a graph PNG file.
 
 
+### To Dos
+
+ [ ] Update `train_ddp.py` to support work with all models.
+ [ ] Train pure pytorch implementation model of Mamba and store the outputs to `./checkpoints/mamba/torch` (and move the existing checkpoints to `./checkpoints/mamba/cuda`).
+ [ ] Run `chart_losses.py` on the pure pytorch implementation of Mamba and store the outputs to `./images/training/mamba/torch`.
+
+
 ### Notes
 
  - Number of classes depending on training set used (includes classes from validation.clean and test.clean splits).
