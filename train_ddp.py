@@ -191,7 +191,7 @@ class Trainer:
 
         # Model losses.
         self.criterion = nn.CrossEntropyLoss(
-            weights.to(self.gpu_id)
+            weight=torch.FloatTensor(weights).to(self.gpu_id)
         )
         self.val_criterion = nn.CrossEntropyLoss()
 
@@ -424,6 +424,7 @@ def ddp_func(rank, world_size, args, model_config):
     speaker_ids.extend(train_set["speaker_id"])
     speaker_ids.extend(test_set["speaker_id"])
     speaker_ids.extend(validation_set["speaker_id"])
+    speaker_ids = [speaker_id[0] for speaker_id in tqdm(speaker_ids)]
 
     train_set, validation_set, _ = get_dataset(
         model_config, train_set, test_set, validation_set

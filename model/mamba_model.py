@@ -39,7 +39,7 @@ class MambaTorchModel(nn.Module):
                 conv_bias=conv_bias,
                 bias=bias,
                 scan_mode=scan_mode,
-            )
+            ) for _ in range(n_layers)
         ])
 
         # Global average pooling.
