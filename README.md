@@ -33,8 +33,8 @@ This repo uses the LibriSpeech dataset, which can be quite large on-disk. After 
      - Must be ran after the dataset has been processed with `preprocess.py`.
  - Model training
      - Trains the specified model over the specified dataset.
-     - `train_tacomamba.py` for single GPU training.
-     - `train_tacomamba_ddp.py` for multi-GPU, single machine training.
+     - `train.py` for single GPU training.
+     - `train_ddp.py` for multi-GPU, single machine training.
  - `chart_losses.py`
      - Runs the trained models over the dataset and records the losses for each epoch. Losses are then output in a JSON file and charted in a graph PNG file.
 

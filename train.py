@@ -133,9 +133,9 @@ def main():
     parser.add_argument(
         "--dataset",
         type=str,
-        choices=["ljspeech", "librispeech"],
-        default="ljspeech",
-        help="Specify which dataset to Load. Default is `ljspeech` if not specified."
+        choices=["librispeech"],
+        default="librispeech",
+        help="Specify which dataset to Load. Default is `librispeech` if not specified."
     )
     parser.add_argument(
         "--train_split",
@@ -150,8 +150,8 @@ def main():
     parser.add_argument(
         "--model_config",
         type=str,
-        default="./config/model/mamba_config1.yml",
-        help="Specify which config yaml file to load when initializing mamba model."
+        default="./config/model/conv1d/model_config1.yml",
+        help="Specify which config yaml file to load when initializing the model."
     )
     parser.add_argument(
         "--enable_multiGPU",
