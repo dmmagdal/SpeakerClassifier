@@ -174,7 +174,7 @@ class Trainer:
         # Model and training config.
         self.save_every = save_every
         self.model_config = model_config
-        self.transformer_model = model_config["model"]["type"] == "transformer":
+        self.transformer_model = model_config["model"]["type"] == "transformer"
         if self.transformer_model:
             self.max_len = model_config["model"]["max_len"]
         self.speaker_to_class = speaker_to_class
@@ -206,7 +206,7 @@ class Trainer:
                     state[k] = v.to(gpu_id)
 
 
-    def _run_batch(self, mels, labels, train = True):
+    def _run_batch(self, mels, labels, train = True, mask = None):
         loss_fn = self.val_criterion
         if train:
             self.optimizer.zero_grad()
@@ -214,7 +214,10 @@ class Trainer:
 
         if self.use_fp16:
             with autocast(enabled=self.use_fp16, device_type='cuda', dtype=torch.float16):
-                outs = self.model(mels)
+                if self.transformer_model:
+                    outs = self.model(mels, mask)
+                else:
+                    outs = self.model(mels)
         else:
             outs = self.model(mels)
         loss = loss_fn(outs, labels)
@@ -249,8 +252,13 @@ class Trainer:
                 ]
             ).to(self.gpu_id)
             mels = data["mel"].to(self.gpu_id)
+            if self.transformer_model:
+                lengths = data["length"]
+                mask = get_padding_mask(lengths).to(self.gpu_id)
+                loss = self._run_batch(mels, labels, True, mask)
+            else:
+                loss = self._run_batch(mels, labels)
 
-            loss = self._run_batch(mels, labels)
             total_loss += loss
             num_batches += 1
 
@@ -274,7 +282,12 @@ class Trainer:
             ).to(self.gpu_id)
             mels = data["mel"].to(self.gpu_id)
             with torch.no_grad():
-                loss = self._run_batch(mels, labels, False)
+                if self.transformer_model:
+                    lengths = data["length"]
+                    mask = get_padding_mask(lengths).to(self.gpu_id)
+                    loss = self._run_batch(mels, labels, False, mask)
+                else:
+                    loss = self._run_batch(mels, labels, False)
 
             total_loss += loss
             num_batches += 1
@@ -300,9 +313,9 @@ class Trainer:
 
 def get_dataset(model_config, train_set, test_set, validation_set):
     batch_size = model_config["train"]["batch_size"]
-    train_set = train_set.with_format(type="torch", columns=["text_seq", "mel"])
-    test_set = test_set.with_format(type="torch", columns=["text_seq", "mel"])
-    validation_set = validation_set.with_format(type="torch", columns=["text_seq", "mel"])
+    train_set = train_set.with_format(type="torch", columns=["speaker_id", "mel"])
+    test_set = test_set.with_format(type="torch", columns=["speaker_id", "mel"])
+    validation_set = validation_set.with_format(type="torch", columns=["speaker_id", "mel"])
     train_set = DataLoader(
         train_set,
         batch_size=batch_size,
@@ -382,9 +395,6 @@ def ddp_func(rank, world_size, args, model_config):
             exit(1)
 
     # Load the training, test, and validation data.
-    train_set, validation_set, _ = get_dataset(
-        model_config, dataset_name, dataset_dir
-    )
     if dataset_name == "librispeech" and split in custom_splits:
         train_set, test_set, validation_set = load_custom_split_dataset(
             dataset_name, split
@@ -534,6 +544,7 @@ def main():
     model_config_path = args.model_config
     checkpoint_path = args.checkpoint_path
     custom_splits = ["all", "all-clean"]
+    clear_cache_files()
 
     ###################################################################
     # Model config & detect (compute) devices
@@ -551,7 +562,7 @@ def main():
         model_config = yaml.safe_load(f)
 
     # Validate dataset path exists.
-    split = args.split if dataset_name == "librispeech" else "train"
+    split = args.train_split if dataset_name == "librispeech" else "train"
     dataset_dir = f"./data/processed/{dataset_name}/{split}"
 
     if split not in custom_splits:
