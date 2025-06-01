@@ -37,6 +37,9 @@ This repo uses the LibriSpeech dataset, which can be quite large on-disk. After 
      - `train_ddp.py` for multi-GPU, single machine training.
  - `chart_losses.py`
      - Runs the trained models over the dataset and records the losses for each epoch. Losses are then output in a JSON file and charted in a graph PNG file.
+ - `get_model_vram.py`
+     - Runs the trained models over the dataset and records the VRAM usage for one epoch.
+     - Requires CUDA GPU in order to run due to `pynvml` dependency (see `environment-cuda.yml`).
 
 
 ### To Dos
@@ -60,6 +63,23 @@ This repo uses the LibriSpeech dataset, which can be quite large on-disk. After 
  - I weighted the classes for the speaker ids and passed that to the loss function to allow for a bit of a better balance on the outputs.
  - Anything under a folder marked as "train.460" or "train.960" corresponds to the combination of training sets (train.clean.100 + train.clean.360) and (train.clean.100 + train.clean.360 + train.other.500) respectively.
  - Mamba has 3 config files. First one is for using the `mamba-ssm` module from the state-spaces repo. This requires CUDA in order to run. The other two are for using a pure pytorch implementation of Mamba that don't require CUDA (meaning you can run this on CPU or Apple Silicon). The latter implementation does not have the same optimizations are the other and may take up considerably more resources.
+     - Currently, I wasn't able to get the vanilla pytorch implementation of Mamba to train (even on my GPU server) without getting OOM issues on GPU. It may not be worth pursuing at this point.
+
+
+### VRAM Usage
+
+ - Conv1d
+     - training: 2569.25 MB
+     - inference: 1427.25 MB
+ - Conv2d
+     - training: 3071.62 MB
+     - inference: 1614.12 MB
+ - Transformer
+     - training: 10395.12 MB
+     - inference: 5417.81 MB
+ - Mamba
+     - training: 6998.25 MB
+     - inference: 7992.25 MB
 
 
 ### References
