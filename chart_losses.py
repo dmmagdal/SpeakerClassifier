@@ -125,7 +125,7 @@ def main():
     parser.add_argument(
         "--model_config",
         type=str,
-        default="./config/model/conv1d/model_config1.yml",
+        default="./config/model/conv1d/model_config1.yaml",
         help="Specify which config yaml file to load when initializing the model."
     )
     parser.add_argument(
@@ -139,12 +139,18 @@ def main():
         default="./checkpoints",
         help="Where to store checkpoints for the model. Default is './checkpoints'"
     )
+    parser.add_argument(
+        "--chart_test_losses",
+        action='store_true',
+        help="Whether to look for and chart out the test and validation losses across all models. Default is false if not specified."
+    )
 
     # Parse arguments.
     args = parser.parse_args()
     dataset_name = args.dataset
     model_config_path = args.model_config
     checkpoint_path = args.checkpoint_path
+    chart_test_losses = args.chart_test_losses
     custom_splits = ["all", "all-clean"]
 
     ###################################################################
@@ -207,6 +213,77 @@ def main():
             print(f"Scan operation '{model_config['model']['scan_mode']}' on '{devices}' is not supported.")
             print(f"Running at half precision will fail at this time.")
             exit(1)
+
+    ###################################################################
+    # Check for existing JSON
+    ###################################################################
+    if chart_test_losses:
+
+        # TODO:
+        # Generalize this to a function when other datasets are used
+        # (not just LibriSpeech).
+        
+        # Isolate the files.
+        losses_path = "./images/training"
+        model_losses = [
+            os.path.join(losses_path, model)
+            for model in os.listdir(losses_path)
+            if os.path.isdir(os.path.join(losses_path, model))
+        ]
+        if dataset_name == "librispeech":
+            train_folder_num = split.split(".")[-1]
+            if split in custom_splits:
+                if split == "all-clean":
+                    train_folder_num = "460"
+                else:
+                    train_folder_num = "960"
+            
+            train_folder = f"train.{train_folder_num}"
+
+        # Load the losses
+        keys = ["Training", "Test", "Validation"]
+        split_to_losses = {key: dict() for key in keys}
+        for model in model_losses:
+            model_name = os.path.basename(model)
+            full_loss_path = os.path.join(
+                model, train_folder, "chart_losses.json"
+            )
+
+            # Load the JSON containing the losses across epochs.
+            with open(full_loss_path, "r") as f:
+                data = json.load(f)
+
+            # Store the losses to the respective dictionaries.
+            for key in keys:
+                split_to_losses[key][model_name] = data[key]
+
+        # Chart everything.
+        output_folder = f"./images/model_loss_charts/{train_folder}"
+        os.makedirs(output_folder, exist_ok=True)
+
+        for key in list(split_to_losses.keys()):
+            key_losses = split_to_losses[key]
+
+            # Create the plot
+            plt.figure(figsize=(10, 6))
+
+            for model_name, losses in key_losses.items():
+                plt.plot(range(1, len(losses) + 1), losses, label=model_name, marker='o')
+
+            # Add labels and legend
+            plt.title(f'Model {key} Loss Across Epochs')
+            plt.xlabel('Epoch')
+            plt.ylabel('Loss')
+            plt.legend()
+            plt.grid(True)
+
+            # Show the plot
+            plt.tight_layout()
+            # plt.show()
+            plt.savefig(os.path.join(output_folder, f"{key.lower()}_loss.png"))
+
+        # Exit the program.
+        exit(0)
 
     ###################################################################
     # Dataset loading
