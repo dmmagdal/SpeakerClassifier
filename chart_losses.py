@@ -248,6 +248,9 @@ def main():
             full_loss_path = os.path.join(
                 model, train_folder, "chart_losses.json"
             )
+            
+            if not os.path.exists(full_loss_path):
+                continue
 
             # Load the JSON containing the losses across epochs.
             with open(full_loss_path, "r") as f:
